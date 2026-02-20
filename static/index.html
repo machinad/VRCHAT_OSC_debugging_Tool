@@ -253,6 +253,29 @@
             border-radius: 4px;
             margin-left: auto;
         }
+
+        /* 自定义参数分隔行 */
+        .custom-params-separator {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 12px 0 8px 0;
+            margin-top: 10px;
+            border-top: 1px solid rgba(255, 215, 0, 0.3);
+            color: #ffd700;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+
+        /* 自定义参数项样式 */
+        [data-custom-param="true"] {
+            background: rgba(255, 215, 0, 0.05) !important;
+            border-left: 3px solid rgba(255, 215, 0, 0.5);
+        }
+
+        [data-custom-param="true"]:hover {
+            background: rgba(255, 215, 0, 0.1) !important;
+        }
     </style>
 </head>
 <body>
@@ -282,6 +305,10 @@
     <script>
         // 全局变量
         const parameters = {};
+        let customParameters = {
+            params: {},
+            avatarName: ''
+        };
         let ws = null;
 
         // ===== WebSocket连接 =====
@@ -325,6 +352,11 @@
                 case 'init':
                     console.log('[WebSocket] Received init with', msg.parameters.length, 'parameters');
                     console.log('[WebSocket] First param:', msg.parameters[0]);
+                    // 清空现有参数（包括自定义参数）
+                    Object.keys(parameters).forEach(key => delete parameters[key]);
+                    customParameters = { params: {}, avatarName: '' };
+                    removeCustomParamsFromUI();
+                    // 加载系统参数
                     msg.parameters.forEach(p => {
                         parameters[p.name] = p;
                     });
@@ -343,6 +375,31 @@
                         parameters[msg.name].value = msg.value;
                         updateInputDisplay(msg.name, msg.value);
                     }
+                    break;
+
+                case 'custom_params':
+                    console.log('[WebSocket] Received custom params:', msg.parameters.length, 'for', msg.avatarName);
+                    // 存储自定义参数
+                    customParameters.avatarName = msg.avatarName;
+                    customParameters.params = {};
+                    msg.parameters.forEach(p => {
+                        customParameters.params[p.name] = p;
+                        // 同时添加到主参数表以便处理消息
+                        parameters[p.name] = p;
+                    });
+                    renderCustomParams();
+                    break;
+
+                case 'clear_custom_params':
+                    console.log('[WebSocket] Clearing custom params');
+                    // 从主参数表中移除
+                    Object.keys(customParameters.params).forEach(name => {
+                        delete parameters[name];
+                    });
+                    // 清空自定义参数
+                    customParameters.params = {};
+                    customParameters.avatarName = '';
+                    removeCustomParamsFromUI();
                     break;
             }
         }
@@ -378,6 +435,67 @@
             });
 
             console.log(`[Render] Input: ${inputCount}, Output: ${outputCount}`);
+        }
+
+        // ===== 渲染自定义参数 =====
+        function renderCustomParams() {
+            if (!customParameters.avatarName || Object.keys(customParameters.params).length === 0) {
+                return;
+            }
+
+            const inputPanel = document.getElementById('inputPanel');
+            const outputPanel = document.getElementById('outputPanel');
+
+            // 移除旧的自定义参数
+            removeCustomParamsFromUI();
+
+            // 添加分隔行到 Input 面板
+            const hasInputParams = Object.values(customParameters.params).some(p => p.isInput);
+            if (hasInputParams) {
+                const inputSeparator = document.createElement('div');
+                inputSeparator.className = 'custom-params-separator';
+                inputSeparator.dataset.customSeparator = 'true';
+                inputSeparator.innerHTML = `🎭 ${customParameters.avatarName} - 用户自定义参数`;
+                inputPanel.appendChild(inputSeparator);
+
+                // 添加 Input 参数
+                Object.values(customParameters.params).forEach(param => {
+                    if (param.isInput) {
+                        const el = createInputControl(param, '自定义');
+                        el.dataset.customParam = 'true';
+                        inputPanel.appendChild(el);
+                    }
+                });
+            }
+
+            // 添加分隔行到 Output 面板
+            const hasOutputParams = Object.values(customParameters.params).some(p => p.isOutput);
+            if (hasOutputParams) {
+                const outputSeparator = document.createElement('div');
+                outputSeparator.className = 'custom-params-separator';
+                outputSeparator.dataset.customSeparator = 'true';
+                outputSeparator.innerHTML = `🎭 ${customParameters.avatarName} - 用户自定义参数`;
+                outputPanel.appendChild(outputSeparator);
+
+                // 添加 Output 参数
+                Object.values(customParameters.params).forEach(param => {
+                    if (param.isOutput) {
+                        const el = createOutputDisplay(param, '自定义');
+                        el.dataset.customParam = 'true';
+                        outputPanel.appendChild(el);
+                    }
+                });
+            }
+
+            console.log(`[CustomParams] Rendered ${Object.keys(customParameters.params).length} custom params for ${customParameters.avatarName}`);
+        }
+
+        // ===== 从UI中移除自定义参数 =====
+        function removeCustomParamsFromUI() {
+            // 移除分隔行
+            document.querySelectorAll('[data-custom-separator="true"]').forEach(el => el.remove());
+            // 移除自定义参数项
+            document.querySelectorAll('[data-custom-param="true"]').forEach(el => el.remove());
         }
 
         // ===== 创建Input控件 =====

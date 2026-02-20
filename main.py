@@ -8,7 +8,6 @@ VRChat OSC Controller - 基于 VRChat Wiki 官方参数规范
 import asyncio
 import json
 import os
-from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -25,11 +24,7 @@ OSC_RECEIVE_PORT = 9001  # 接收来自VRChat
 WEB_HOST = "0.0.0.0"
 WEB_PORT = 8080
 
-# 参数配置文件路径
-CONFIG_FILE = "avtr_46040475-8cfe-410f-9744-cdaa117887bc.json"
 
-# 是否加载 JSON 文件扩展参数（可通过环境变量控制）
-LOAD_JSON_PARAMS = os.getenv("LOAD_JSON_PARAMS", "false").lower() == "true"
 
 
 @dataclass
@@ -1083,260 +1078,298 @@ WIKI_PARAMETERS = {
 }
 
 
-class ParameterProvider(ABC):
-    """参数提供器抽象基类
+class AvatarParameterLoader:
+    """角色参数加载器 - 处理动态加载角色自定义参数
     
-    定义参数提供器的接口，用于从不同来源获取VRChat OSC参数。
-    所有具体的参数提供器都必须继承此类并实现抽象方法。
+    当VRChat切换角色时，自动从本地OSC目录加载对应角色的JSON配置文件，
+    提取自定义参数并实时更新到系统中。
     """
-
-    @abstractmethod
-    def get_parameters(self) -> Dict[str, Parameter]:
-        """获取参数字典
-        
-        返回:
-            字典，键为参数名称，值为Parameter对象
-        """
-        pass
-
-    @abstractmethod
-    def get_source_name(self) -> str:
-        """获取参数源名称
-        
-        返回:
-            参数源的描述性名称字符串
-        """
-        pass
-
-
-class WikiParameterProvider(ParameterProvider):
-    """VRChat Wiki官方参数提供器
     
-    从VRChat Wiki官方文档定义的参数列表中获取标准OSC参数。
-    包含所有VRChat内置的输入、输出、相机、追踪等参数。
-    """
-
-    def get_parameters(self) -> Dict[str, Parameter]:
-        """从VRChat Wiki官方参数定义中获取参数字典
-        
-        根据参数类别确定参数的输入/输出属性，并创建对应的Parameter对象。
-        
-        返回:
-            包含所有VRChat官方参数的字典
-        """
-        parameters = {}
-        for name, config in WIKI_PARAMETERS.items():
-            category = config.get("category", "other")
-
-            # Determine read/write based on category
-            if category == "input":
-                is_input = True
-                is_output = False
-            elif category == "chatbox":
-                is_input = True
-                is_output = False
-            elif category == "camera":
-                is_input = True
-                is_output = True
-            elif category == "system":
-                is_input = True
-                is_output = True
-            elif category == "tracking":
-                is_input = False
-                is_output = True
-            elif category == "avatar":
-                # Avatar system parameters are read-only
-                is_input = False
-                is_output = True
-            elif category == "dolly":
-                is_input = True
-                is_output = False
-            else:
-                is_input = True
-                is_output = False
-
-            param = Parameter(
-                name=name,
-                address=config["address"],
-                param_type=config["type"],
-                min_val=config.get("min", 0.0),
-                max_val=config.get("max", 1.0),
-                is_input=is_input,
-                is_output=is_output,
-                category=category,
-                description=config.get("description", ""),
-                display_name=config.get("display_name", name)
-            )
-            parameters[name] = param
-        return parameters
-
-    def get_source_name(self) -> str:
-        """获取参数源名称
-        
-        返回VRChat Wiki官方参数源的名称。
-        """
-        return "VRChat Wiki Official"
-
-
-class JsonFileParameterProvider(ParameterProvider):
-    """JSON文件参数提供器（用于自定义角色参数）
-    
-    从JSON配置文件中读取自定义角色参数，扩展VRChat官方参数集。
-    支持自定义的输入和输出参数定义。
-    """
-
-    def __init__(self, file_path: str):
-        """初始化JSON文件参数提供器
+    def __init__(self, controller):
+        """初始化角色参数加载器
         
         参数:
-            file_path: JSON配置文件路径
+            controller: VRChatController实例，用于回调和参数管理
         """
-        self.file_path = file_path
-
-    def get_parameters(self) -> Dict[str, Parameter]:
-        """从JSON文件中获取自定义参数
+        self.controller = controller
+        self.custom_params: Dict[str, Parameter] = {}
+        self.current_avatar_id: Optional[str] = None
+        self.current_avatar_name: str = ""
+    
+    def _get_vrchat_osc_path(self) -> Optional[str]:
+        """自动扫描获取 VRChat OSC 路径
         
-        读取JSON配置文件，解析其中的输入和输出参数定义，
-        创建对应的Parameter对象。
+        通过环境变量获取用户目录，扫描找到 usr_* 文件夹。
         
         返回:
-            包含自定义参数的字典，如果文件不存在或解析失败则返回空字典
+            Avatars 目录路径，如果未找到则返回 None
         """
-        parameters = {}
-
-        if not os.path.exists(self.file_path):
-            print(f"[Config] JSON file not found: {self.file_path}")
-            return parameters
-
         try:
-            with open(self.file_path, 'r', encoding='utf-8-sig') as f:
-                config = json.load(f)
-
-            for p in config.get("parameters", []):
-                name = p["name"]
-
-                # Input parameters
-                if "input" in p:
-                    inp = p["input"]
-                    param_type = inp["type"]
-
-                    min_val, max_val = 0.0, 1.0
-                    if param_type == "Int":
-                        min_val, max_val = 0, 8
-                    elif param_type == "Float":
-                        min_val, max_val = 0.0, 1.0
-                    elif param_type == "Bool":
-                        min_val, max_val = 0, 1
-
-                    param = Parameter(
-                        name=name,
-                        address=inp["address"],
-                        param_type=param_type,
-                        min_val=min_val,
-                        max_val=max_val,
-                        is_input=True,
-                        is_output=False,
-                        category="avatar",
-                        description="Custom avatar parameter from JSON"
-                    )
-                    parameters[name] = param
-
-                # Output parameters
-                if "output" in p:
-                    out = p["output"]
-                    param_type = out["type"]
-
-                    min_val, max_val = 0.0, 1.0
-                    if param_type == "Int":
-                        min_val, max_val = 0, 255
-                    elif param_type == "Float":
-                        min_val, max_val = -1.0, 1.0
-                    elif param_type == "Bool":
-                        min_val, max_val = 0, 1
-
-                    if name in parameters:
-                        # Existing input parameter, add output capability
-                        parameters[name].is_output = True
-                    else:
-                        param = Parameter(
-                            name=name,
-                            address=out["address"],
-                            param_type=param_type,
-                            min_val=min_val,
-                            max_val=max_val,
-                            is_input=False,
-                            is_output=True,
-                            category="avatar",
-                            description="Custom avatar parameter from JSON"
-                        )
-                        parameters[name] = param
-
-            print(f"[Config] Loaded {len(parameters)} parameters from JSON: {self.file_path}")
-
+            # 获取用户主目录，构建 LocalLow 路径
+            # VRChat OSC 文件存放在 AppData/LocalLow 而非 Local
+            user_profile = os.environ.get('USERPROFILE')
+            if not user_profile:
+                print("[AvatarLoader] USERPROFILE environment variable not found")
+                return None
+            
+            # 基础 OSC 路径 (LocalLow 目录)
+            osc_base = os.path.join(user_profile, 'AppData', 'LocalLow', 'VRChat', 'VRChat', 'OSC')
+            if not os.path.exists(osc_base):
+                print(f"[AvatarLoader] OSC directory not found: {osc_base}")
+                return None
+            
+            # 扫描 usr_* 文件夹
+            usr_dirs = [d for d in os.listdir(osc_base) 
+                       if d.startswith('usr_') and os.path.isdir(os.path.join(osc_base, d))]
+            
+            if not usr_dirs:
+                print(f"[AvatarLoader] No usr_* directory found in {osc_base}")
+                return None
+            
+            # 使用第一个找到的 usr 目录
+            usr_dir = usr_dirs[0]
+            avatars_path = os.path.join(osc_base, usr_dir, 'Avatars')
+            
+            if not os.path.exists(avatars_path):
+                print(f"[AvatarLoader] Avatars directory not found: {avatars_path}")
+                return None
+            
+            return avatars_path
+            
         except Exception as e:
-            print(f"[Config] Error loading JSON file: {e}")
-
-        return parameters
-
-    def get_source_name(self) -> str:
-        """获取参数源名称
-        
-        返回JSON文件参数源的描述性名称。
-        """
-        return f"JSON File: {self.file_path}"
-
-
-class CompositeParameterProvider(ParameterProvider):
-    """复合参数提供器
+            print(f"[AvatarLoader] Error finding OSC path: {e}")
+            return None
     
-    组合多个参数提供器，合并它们的参数。
-    后续提供器的参数会覆盖先前提供器的同名参数。
-    """
-
-    def __init__(self, providers: List[ParameterProvider]):
-        """初始化复合参数提供器
+    def _get_default_range(self, param_type: str) -> tuple:
+        """获取参数类型的默认数值范围
         
         参数:
-            providers: 参数提供器列表，按优先级从低到高排列
-        """
-        self.providers = providers
-
-    def get_parameters(self) -> Dict[str, Parameter]:
-        """合并所有提供器的参数
-        
-        按照提供器列表的顺序合并参数，后续提供器的同名参数会覆盖先前提供器。
-        同时合并参数的输入/输出属性。
-        
+            param_type: 参数类型 (Bool, Int, Float)
+            
         返回:
-            合并后的参数字典
+            (min_val, max_val) 元组
         """
-        parameters = {}
-        for provider in self.providers:
-            params = provider.get_parameters()
-            source_name = provider.get_source_name()
-            print(f"[Config] Loading from {source_name}: {len(params)} parameters")
-
-            for name, param in params.items():
-                if name in parameters:
-                    # Merge same-name parameters (input/output attributes)
-                    existing = parameters[name]
-                    existing.is_input = existing.is_input or param.is_input
-                    existing.is_output = existing.is_output or param.is_output
-                    # Keep more precise range definition
-                    if param.min_val != 0.0 or param.max_val != 1.0:
-                        existing.min_val = param.min_val
-                        existing.max_val = param.max_val
-                else:
-                    parameters[name] = param
-
-        return parameters
-
-    def get_source_name(self) -> str:
-        """获取参数源名称
+        if param_type == "Bool":
+            return 0, 1
+        elif param_type == "Int":
+            return 0, 20
+        else:  # Float
+            return 0.0, 1.0
+    
+    def _parse_avatar_json(self, file_path: str) -> Optional[Dict]:
+        """解析角色 JSON 文件
         
-        返回复合参数提供器的名称。
+        参数:
+            file_path: JSON 文件完整路径
+            
+        返回:
+            包含 name 和 params 的字典，解析失败返回 None
         """
-        return "Composite"
+        try:
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
+                data = json.load(f)
+            
+            avatar_name = data.get('name', 'Unknown')
+            parameters = data.get('parameters', [])
+            
+            parsed_params = {}
+            
+            for param_def in parameters:
+                name = param_def.get('name')
+                if not name:
+                    continue
+                
+                # 检查 input/output 定义
+                has_input = 'input' in param_def
+                has_output = 'output' in param_def
+                
+                if not has_input and not has_output:
+                    continue
+                
+                # 获取 address 和 type（优先使用 input）
+                if has_input:
+                    address = param_def['input']['address']
+                    param_type = param_def['input']['type']
+                else:
+                    address = param_def['output']['address']
+                    param_type = param_def['output']['type']
+                
+                min_val, max_val = self._get_default_range(param_type)
+                
+                # 创建参数对象
+                param = Parameter(
+                    name=f"Custom_{name}",  # 添加前缀避免与系统参数冲突
+                    address=address,
+                    param_type=param_type,
+                    min_val=min_val,
+                    max_val=max_val,
+                    is_input=has_input,
+                    is_output=has_output,
+                    category="avatar",  # 使用 avatar 类别以便接收 OSC 消息
+                    description=f"自定义参数: {avatar_name}",
+                    display_name=name
+                )
+                
+                parsed_params[param.name] = param
+            
+            return {
+                'name': avatar_name,
+                'params': parsed_params
+            }
+            
+        except Exception as e:
+            print(f"[AvatarLoader] Error parsing JSON: {e}")
+            return None
+    
+    def _filter_existing_addresses(self, params: Dict[str, Parameter]) -> Dict[str, Parameter]:
+        """过滤掉系统中已存在的 address
+        
+        参数:
+            params: 待过滤的参数字典
+            
+        返回:
+            过滤后的参数字典
+        """
+        # 获取系统所有已存在的 address
+        existing_addresses = {p.address for p in self.controller.parameters.values()}
+        
+        filtered = {}
+        for name, param in params.items():
+            if param.address in existing_addresses:
+                print(f"[AvatarLoader] Skipping existing address: {param.address}")
+                continue
+            filtered[name] = param
+        
+        return filtered
+    
+    async def load_avatar_params(self, avatar_id: str) -> bool:
+        """加载指定角色的自定义参数
+        
+        1. 清空现有自定义参数
+        2. 查找 JSON 文件
+        3. 解析并过滤参数
+        4. 添加到系统并广播给前端
+        
+        参数:
+            avatar_id: 角色ID
+            
+        返回:
+            是否成功加载参数
+        """
+        if avatar_id == self.current_avatar_id:
+            return True  # 同一角色，无需重新加载
+        
+        # 1. 清空现有自定义参数
+        await self.clear_custom_params()
+        
+        self.current_avatar_id = avatar_id
+        
+        # 2. 查找 JSON 文件
+        avatars_path = self._get_vrchat_osc_path()
+        if not avatars_path:
+            return False
+        
+        json_file = os.path.join(avatars_path, f"{avatar_id}.json")
+        if not os.path.exists(json_file):
+            print(f"[AvatarLoader] Avatar JSON not found: {json_file}")
+            return False
+        
+        print(f"[AvatarLoader] Loading avatar params from: {json_file}")
+        
+        # 3. 解析 JSON
+        result = self._parse_avatar_json(json_file)
+        if not result:
+            return False
+        
+        self.current_avatar_name = result['name']
+        raw_params = result['params']
+        
+        # 4. 过滤已存在的 address
+        self.custom_params = self._filter_existing_addresses(raw_params)
+        
+        if not self.custom_params:
+            print("[AvatarLoader] No new custom parameters found")
+            return False
+        
+        # 5. 添加到系统参数
+        self.controller.parameters.update(self.custom_params)
+        
+        print(f"[AvatarLoader] Loaded {len(self.custom_params)} custom parameters for '{self.current_avatar_name}'")
+        
+        # 6. 广播给前端
+        param_list = []
+        for param in self.custom_params.values():
+            param_list.append({
+                "name": param.name,
+                "type": param.param_type,
+                "address": param.address,
+                "min": param.min_val,
+                "max": param.max_val,
+                "isInput": param.is_input,
+                "isOutput": param.is_output,
+                "value": param.value,
+                "category": param.category,
+                "displayName": param.display_name,
+                "description": param.description
+            })
+        
+        await self.controller.broadcast({
+            "type": "custom_params",
+            "avatarName": self.current_avatar_name,
+            "parameters": param_list
+        })
+        
+        return True
+    
+    async def clear_custom_params(self):
+        """清空当前自定义参数并通知前端"""
+        if not self.custom_params:
+            return
+        
+        # 从系统参数中移除
+        for name in self.custom_params:
+            if name in self.controller.parameters:
+                del self.controller.parameters[name]
+        
+        # 通知前端清空
+        await self.controller.broadcast({
+            "type": "clear_custom_params"
+        })
+        
+        self.custom_params.clear()
+        print("[AvatarLoader] Cleared custom parameters")
+
+
+def load_parameters() -> Dict[str, Parameter]:
+    """从 WIKI_PARAMETERS 加载参数
+    
+    如需扩展自定义参数，在此函数中添加即可
+    """
+    parameters = {}
+    
+    for name, config in WIKI_PARAMETERS.items():
+        category = config.get("category", "other")
+        
+        # 根据类别确定输入/输出属性
+        is_input = category in ("input", "chatbox", "camera", "system", "dolly")
+        is_output = category in ("camera", "system", "tracking", "avatar")
+        
+        param = Parameter(
+            name=name,
+            address=config["address"],
+            param_type=config["type"],
+            min_val=config.get("min", 0.0),
+            max_val=config.get("max", 1.0),
+            is_input=is_input,
+            is_output=is_output,
+            category=category,
+            description=config.get("description", ""),
+            display_name=config.get("display_name", name)
+        )
+        parameters[name] = param
+    
+    print(f"[Config] Loaded {len(parameters)} parameters from WIKI_PARAMETERS")
+    return parameters
 
 
 class OSCManager:
@@ -1454,6 +1487,13 @@ class OSCManager:
                     self.message_queue.get(), timeout=0.1
                 )
 
+                # Handle avatar change event
+                if category == "system" and address == "/avatar/change":
+                    avatar_id = str(value)
+                    if self.controller.avatar_loader:
+                        await self.controller.avatar_loader.load_avatar_params(avatar_id)
+                    # 继续更新 System_AvatarID 参数的值，而不是跳过
+
                 # Find corresponding parameter
                 for name, param in self.controller.parameters.items():
                     if param.category != category:
@@ -1537,49 +1577,29 @@ class VRChatController:
         self.parameters: Dict[str, Parameter] = {}
         self.websockets: set = set()
         self.osc = OSCManager(self)
-        self._parameter_provider: Optional[ParameterProvider] = None
-
-    def setup_parameter_provider(self, load_json: bool = False, json_file: str = CONFIG_FILE):
-        """设置参数提供器
-        
-        根据配置决定是否加载JSON文件作为参数扩展。
-        
-        参数:
-            load_json: 是否加载JSON文件作为参数扩展
-            json_file: JSON配置文件路径
-        """
-        providers: List[ParameterProvider] = [WikiParameterProvider()]
-
-        if load_json:
-            providers.append(JsonFileParameterProvider(json_file))
-            print(f"[Config] JSON extension enabled: {json_file}")
-        else:
-            print("[Config] Using Wiki standard parameters only (JSON extension disabled)")
-            print("[Config] Set LOAD_JSON_PARAMS=true to enable JSON extension")
-
-        self._parameter_provider = CompositeParameterProvider(providers)
+        self.avatar_loader: Optional[AvatarParameterLoader] = None
 
     def load_config(self):
-        """加载参数配置
-        
-        从参数提供器获取所有参数，并存储到控制器中。
-        """
-        if self._parameter_provider is None:
-            self.setup_parameter_provider(load_json=LOAD_JSON_PARAMS)
-
-        self.parameters = self._parameter_provider.get_parameters()
+        """加载参数配置"""
+        self.parameters = load_parameters()
+        self.avatar_loader = AvatarParameterLoader(self)
         print(f"[Config] Total parameters loaded: {len(self.parameters)}")
 
     def get_parameter_list(self) -> List[Dict]:
         """获取前端参数列表
         
         将参数对象转换为前端可用的字典格式。
+        注意：此方法只返回系统参数，不包含自定义参数。
+        自定义参数通过单独的 custom_params 消息发送。
         
         返回:
             参数字典列表，包含所有前端需要的字段
         """
         result = []
         for name, param in self.parameters.items():
+            # 过滤自定义参数（名称以 Custom_ 开头）
+            if name.startswith("Custom_"):
+                continue
             result.append({
                 "name": name,
                 "type": param.param_type,
@@ -1631,6 +1651,31 @@ class VRChatController:
             "type": "init",
             "parameters": self.get_parameter_list()
         })
+
+        # 如果已有自定义参数，发送给新连接的前端
+        if self.avatar_loader and self.avatar_loader.custom_params:
+            param_list = []
+            for param in self.avatar_loader.custom_params.values():
+                param_list.append({
+                    "name": param.name,
+                    "type": param.param_type,
+                    "address": param.address,
+                    "min": param.min_val,
+                    "max": param.max_val,
+                    "isInput": param.is_input,
+                    "isOutput": param.is_output,
+                    "value": param.value,
+                    "category": param.category,
+                    "displayName": param.display_name,
+                    "description": param.description
+                })
+            
+            await ws.send_json({
+                "type": "custom_params",
+                "avatarName": self.avatar_loader.current_avatar_name,
+                "parameters": param_list
+            })
+            print(f"[WebSocket] Sent {len(param_list)} custom params to new client")
 
         try:
             async for msg in ws:
@@ -1706,10 +1751,9 @@ async def index_handler(request):
 async def init_app():
     """初始化应用程序
     
-    设置参数提供器，加载配置，启动OSC服务器，
+    加载配置，启动OSC服务器，
     并创建Web应用路由。
     """
-    controller.setup_parameter_provider(load_json=LOAD_JSON_PARAMS)
     controller.load_config()
 
     controller.osc.setup()
