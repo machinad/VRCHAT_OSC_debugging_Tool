@@ -1,5 +1,5 @@
 [project]
-name = "VRCHAT_OSC_debugging Tool"
+name = "VRCHAT_OSC_debuggingTool"
 version = "0.1.0"
 description = "vrchat的osc调试工具"
 readme = "README.md"
