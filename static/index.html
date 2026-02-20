@@ -93,7 +93,7 @@
             overflow-y: auto;
         }
 
-        /* 参数项样�?*/
+        /* 参数项样式 */
         .param-item {
             background: rgba(0, 0, 0, 0.2);
             padding: 10px 12px;
@@ -157,7 +157,6 @@
             color: #00d4ff;
         }
 
-        /* 开关样�?*/
         .switch {
             position: relative;
             width: 44px;
@@ -239,7 +238,7 @@
             box-shadow: 0 0 8px #00ff88;
         }
 
-        /* 滚动�?*/
+        /* 滚动条 */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
         ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
@@ -259,7 +258,7 @@
 <body>
     <div class="status-bar">
         <div class="status-dot" id="statusDot"></div>
-        <span id="statusText">连接�?..</span>
+        <span id="statusText">连接中...</span>
     </div>
 
     <div class="container">
@@ -424,7 +423,7 @@
                         <input type="range" min="${min}" max="${max}" step="${step}"
                                value="${value}"
                                oninput="handleSliderChange('${param.name}', this.value, '${param.type}')">
-                        <span class="value-display" id="val-${param.displayName || param.name}">${Number(value).toFixed(param.type === 'Int' ? 0 : 2)}</span>
+                        <span class="value-display" id="val-${param.name}">${Number(value).toFixed(param.type === 'Int' ? 0 : 2)}</span>
                     </div>
                     <span class="param-category">${category}</span>
                 `;
@@ -492,7 +491,7 @@
             sendParamValue(name, type === 'Int' ? parseInt(value) : parseFloat(value));
         }
 
-        // ===== 发送参数�?=====
+        // ===== 发送参数值 =====
         function sendParamValue(name, value) {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
@@ -560,7 +559,7 @@
             }
         }
 
-        // ===== 初始�?=====
+        // ===== 初始化 =====
         connect();
     </script>
 </body>
