@@ -1,7 +1,7 @@
 [project]
-name = "osc-test"
+name = "VRCHAT_OSC_debugging Tool"
 version = "0.1.0"
-description = "Add your description here"
+description = "vrchat的osc调试工具"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
