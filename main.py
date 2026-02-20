@@ -34,6 +34,23 @@ LOAD_JSON_PARAMS = os.getenv("LOAD_JSON_PARAMS", "false").lower() == "true"
 
 @dataclass
 class Parameter:
+    """VRChat OSC 参数数据类
+    
+    表示一个VRChat OSC参数，包含参数的所有元数据和当前值。
+    
+    属性:
+        name: 参数名称（唯一标识符）
+        address: OSC地址（如"/input/Horizontal"）
+        param_type: 参数类型（"Float"、"Int"、"Bool"、"String"）
+        value: 当前参数值
+        min_val: 最小值（对于数值类型）
+        max_val: 最大值（对于数值类型）
+        is_input: 是否为输入参数（可向VRChat发送）
+        is_output: 是否为输出参数（可从VRChat接收）
+        category: 参数类别（"input"、"avatar"、"camera"、"tracking"等）
+        description: 参数描述
+        display_name: 显示名称（用于前端界面）
+    """
     name: str
     address: str
     param_type: str
@@ -1067,23 +1084,46 @@ WIKI_PARAMETERS = {
 
 
 class ParameterProvider(ABC):
-    """Parameter provider abstract base class"""
+    """参数提供器抽象基类
+    
+    定义参数提供器的接口，用于从不同来源获取VRChat OSC参数。
+    所有具体的参数提供器都必须继承此类并实现抽象方法。
+    """
 
     @abstractmethod
     def get_parameters(self) -> Dict[str, Parameter]:
-        """Return parameter dict {name: Parameter}"""
+        """获取参数字典
+        
+        返回:
+            字典，键为参数名称，值为Parameter对象
+        """
         pass
 
     @abstractmethod
     def get_source_name(self) -> str:
-        """Return parameter source name"""
+        """获取参数源名称
+        
+        返回:
+            参数源的描述性名称字符串
+        """
         pass
 
 
 class WikiParameterProvider(ParameterProvider):
-    """VRChat Wiki official parameter provider"""
+    """VRChat Wiki官方参数提供器
+    
+    从VRChat Wiki官方文档定义的参数列表中获取标准OSC参数。
+    包含所有VRChat内置的输入、输出、相机、追踪等参数。
+    """
 
     def get_parameters(self) -> Dict[str, Parameter]:
+        """从VRChat Wiki官方参数定义中获取参数字典
+        
+        根据参数类别确定参数的输入/输出属性，并创建对应的Parameter对象。
+        
+        返回:
+            包含所有VRChat官方参数的字典
+        """
         parameters = {}
         for name, config in WIKI_PARAMETERS.items():
             category = config.get("category", "other")
@@ -1131,16 +1171,37 @@ class WikiParameterProvider(ParameterProvider):
         return parameters
 
     def get_source_name(self) -> str:
+        """获取参数源名称
+        
+        返回VRChat Wiki官方参数源的名称。
+        """
         return "VRChat Wiki Official"
 
 
 class JsonFileParameterProvider(ParameterProvider):
-    """JSON file parameter provider (for custom avatar parameters)"""
+    """JSON文件参数提供器（用于自定义角色参数）
+    
+    从JSON配置文件中读取自定义角色参数，扩展VRChat官方参数集。
+    支持自定义的输入和输出参数定义。
+    """
 
     def __init__(self, file_path: str):
+        """初始化JSON文件参数提供器
+        
+        参数:
+            file_path: JSON配置文件路径
+        """
         self.file_path = file_path
 
     def get_parameters(self) -> Dict[str, Parameter]:
+        """从JSON文件中获取自定义参数
+        
+        读取JSON配置文件，解析其中的输入和输出参数定义，
+        创建对应的Parameter对象。
+        
+        返回:
+            包含自定义参数的字典，如果文件不存在或解析失败则返回空字典
+        """
         parameters = {}
 
         if not os.path.exists(self.file_path):
@@ -1218,17 +1279,37 @@ class JsonFileParameterProvider(ParameterProvider):
         return parameters
 
     def get_source_name(self) -> str:
+        """获取参数源名称
+        
+        返回JSON文件参数源的描述性名称。
+        """
         return f"JSON File: {self.file_path}"
 
 
 class CompositeParameterProvider(ParameterProvider):
-    """Combine multiple parameter providers"""
+    """复合参数提供器
+    
+    组合多个参数提供器，合并它们的参数。
+    后续提供器的参数会覆盖先前提供器的同名参数。
+    """
 
     def __init__(self, providers: List[ParameterProvider]):
+        """初始化复合参数提供器
+        
+        参数:
+            providers: 参数提供器列表，按优先级从低到高排列
+        """
         self.providers = providers
 
     def get_parameters(self) -> Dict[str, Parameter]:
-        """Merge parameters from all providers, later ones override earlier ones"""
+        """合并所有提供器的参数
+        
+        按照提供器列表的顺序合并参数，后续提供器的同名参数会覆盖先前提供器。
+        同时合并参数的输入/输出属性。
+        
+        返回:
+            合并后的参数字典
+        """
         parameters = {}
         for provider in self.providers:
             params = provider.get_parameters()
@@ -1251,11 +1332,25 @@ class CompositeParameterProvider(ParameterProvider):
         return parameters
 
     def get_source_name(self) -> str:
+        """获取参数源名称
+        
+        返回复合参数提供器的名称。
+        """
         return "Composite"
 
 
 class OSCManager:
+    """OSC管理器
+    
+    负责VRChat OSC通信的客户端和服务器端管理。
+    处理OSC消息的发送、接收和分发。
+    """
     def __init__(self, controller):
+        """初始化OSC管理器
+        
+        参数:
+            controller: VRChatController实例，用于回调
+        """
         self.controller = controller
         self.client: Optional[SimpleUDPClient] = None
         self.server: Optional[AsyncIOOSCUDPServer] = None
@@ -1265,7 +1360,11 @@ class OSCManager:
         self._running = False
 
     def setup(self):
-        """Initialize OSC client and server"""
+        """初始化OSC客户端和服务器
+        
+        创建OSC客户端用于发送消息到VRChat，
+        设置OSC消息处理器用于接收来自VRChat的消息。
+        """
         self.client = SimpleUDPClient(OSC_SEND_IP, OSC_SEND_PORT)
 
         # Set up OSC message handlers
@@ -1276,7 +1375,10 @@ class OSCManager:
         self.dispatcher.set_default_handler(self._handle_unknown_message)
 
     def _handle_avatar_messages(self, address: str, *args):
-        """Handle avatar parameter messages"""
+        """处理角色参数消息
+        
+        将接收到的角色参数消息放入消息队列，供后续处理。
+        """
         if not args:
             return
         value = args[0]
@@ -1288,7 +1390,10 @@ class OSCManager:
             pass
 
     def _handle_avatar_change(self, address: str, *args):
-        """Handle avatar change message"""
+        """处理角色切换消息
+        
+        当VRChat切换角色时接收到的消息，记录角色ID并放入消息队列。
+        """
         if not args:
             return
         avatar_id = args[0] if isinstance(args[0], str) else str(args[0])
@@ -1301,7 +1406,10 @@ class OSCManager:
             pass
 
     def _handle_camera_messages(self, address: str, *args):
-        """Handle camera parameter messages"""
+        """处理相机参数消息
+        
+        将接收到的相机参数消息放入消息队列，供后续处理。
+        """
         if not args:
             return
         value = args[0]
@@ -1313,7 +1421,10 @@ class OSCManager:
             pass
 
     def _handle_tracking_messages(self, address: str, *args):
-        """Handle tracking messages (6 float values)"""
+        """处理追踪消息（6个浮点数值）
+        
+        处理VR追踪数据，包含位置和旋转信息。
+        """
         if len(args) < 6:
             return
         try:
@@ -1324,12 +1435,19 @@ class OSCManager:
             pass
 
     def _handle_unknown_message(self, address: str, *args):
-        """Handle unknown OSC messages"""
+        """处理未知OSC消息
+        
+        记录未匹配到处理器的OSC消息，用于调试。
+        """
         if args:
             print(f"[OSC] Unknown message: {address} {args}")
 
     async def process_messages(self):
-        """Process message queue"""
+        """处理消息队列
+        
+        从消息队列中获取OSC消息，找到对应的参数并更新其值，
+        然后广播给所有WebSocket客户端。
+        """
         while self._running:
             try:
                 category, address, value = await asyncio.wait_for(
@@ -1369,7 +1487,10 @@ class OSCManager:
                 print(f"[OSC] Process error: {e}")
 
     async def start_server(self):
-        """Start OSC receive server"""
+        """启动OSC接收服务器
+        
+        创建OSC UDP服务器端点，开始监听来自VRChat的消息。
+        """
         loop = asyncio.get_event_loop()
         self.server = AsyncIOOSCUDPServer(
             ("0.0.0.0", OSC_RECEIVE_PORT),
@@ -1384,31 +1505,48 @@ class OSCManager:
         print(f"[OSC] Server listening on port {OSC_RECEIVE_PORT}")
 
     async def stop_server(self):
-        """Stop OSC server"""
+        """停止OSC服务器
+        
+        关闭OSC服务器传输，停止消息处理循环。
+        """
         self._running = False
         if self.transport:
             self.transport.close()
 
     def send(self, address: str, value: Any):
-        """Send OSC message to VRChat"""
+        """发送OSC消息到VRChat
+        
+        通过OSC客户端向VRChat发送参数值。
+        """
         if self.client:
             self.client.send_message(address, value)
             print(f"[OSC] Sent: {address} = {value}")
 
 
 class VRChatController:
+    """VRChat OSC控制器
+    
+    主控制器类，管理参数提供器、OSC通信和WebSocket连接。
+    协调参数加载、消息处理和前端通信。
+    """
     def __init__(self):
+        """初始化VRChat OSC控制器
+        
+        初始化参数字典、WebSocket连接集合和OSC管理器。
+        """
         self.parameters: Dict[str, Parameter] = {}
         self.websockets: set = set()
         self.osc = OSCManager(self)
         self._parameter_provider: Optional[ParameterProvider] = None
 
     def setup_parameter_provider(self, load_json: bool = False, json_file: str = CONFIG_FILE):
-        """Setup parameter provider
-
-        Args:
-            load_json: Whether to load JSON file as parameter extension
-            json_file: JSON file path
+        """设置参数提供器
+        
+        根据配置决定是否加载JSON文件作为参数扩展。
+        
+        参数:
+            load_json: 是否加载JSON文件作为参数扩展
+            json_file: JSON配置文件路径
         """
         providers: List[ParameterProvider] = [WikiParameterProvider()]
 
@@ -1422,7 +1560,10 @@ class VRChatController:
         self._parameter_provider = CompositeParameterProvider(providers)
 
     def load_config(self):
-        """Load parameter configuration"""
+        """加载参数配置
+        
+        从参数提供器获取所有参数，并存储到控制器中。
+        """
         if self._parameter_provider is None:
             self.setup_parameter_provider(load_json=LOAD_JSON_PARAMS)
 
@@ -1430,7 +1571,13 @@ class VRChatController:
         print(f"[Config] Total parameters loaded: {len(self.parameters)}")
 
     def get_parameter_list(self) -> List[Dict]:
-        """Get parameter list for frontend"""
+        """获取前端参数列表
+        
+        将参数对象转换为前端可用的字典格式。
+        
+        返回:
+            参数字典列表，包含所有前端需要的字段
+        """
         result = []
         for name, param in self.parameters.items():
             result.append({
@@ -1449,7 +1596,11 @@ class VRChatController:
         return result
 
     async def broadcast(self, message: Dict):
-        """Broadcast message to all WebSocket clients"""
+        """广播消息到所有WebSocket客户端
+        
+        将消息发送给所有连接的WebSocket客户端，
+        自动处理断开连接的客户端。
+        """
         if not self.websockets:
             return
 
@@ -1464,7 +1615,11 @@ class VRChatController:
         self.websockets -= disconnected
 
     async def handle_websocket(self, request):
-        """Handle WebSocket connection"""
+        """处理WebSocket连接
+        
+        建立WebSocket连接，发送初始参数列表，
+        并处理来自前端的消息。
+        """
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
@@ -1493,7 +1648,10 @@ class VRChatController:
         return ws
 
     async def handle_message(self, data: Dict):
-        """Handle message from frontend"""
+        """处理来自前端的消息
+        
+        解析前端发送的消息，根据消息类型执行相应操作。
+        """
         msg_type = data.get("type")
 
         if msg_type == "set":
@@ -1538,12 +1696,19 @@ controller = VRChatController()
 
 
 async def index_handler(request):
-    """Handle index request"""
+    """处理首页请求
+    
+    返回静态HTML页面。
+    """
     return web.FileResponse('./static/index.html')
 
 
 async def init_app():
-    """Initialize application"""
+    """初始化应用程序
+    
+    设置参数提供器，加载配置，启动OSC服务器，
+    并创建Web应用路由。
+    """
     controller.setup_parameter_provider(load_json=LOAD_JSON_PARAMS)
     controller.load_config()
 
@@ -1559,7 +1724,10 @@ async def init_app():
 
 
 async def main():
-    """Main function"""
+    """主函数
+    
+    启动Web服务器和OSC通信，等待用户中断。
+    """
     app = await init_app()
 
     runner = web.AppRunner(app)
