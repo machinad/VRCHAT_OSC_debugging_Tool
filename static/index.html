@@ -6,7 +6,7 @@
     <title>VRChat OSC Controller</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
@@ -14,7 +14,7 @@
             min-height: 100vh;
             padding: 20px;
         }
-        
+
         h1 {
             text-align: center;
             margin-bottom: 20px;
@@ -23,9 +23,9 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        
-        .container { max-width: 1600px; margin: 0 auto; }
-        
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
         /* 状态栏 */
         .status-bar {
             position: fixed;
@@ -42,23 +42,19 @@
         }
         .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff4444; transition: background 0.3s; }
         .status-dot.connected { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
-        
-        /* 布局网格 */
-        .main-grid {
+
+        /* 两列布局 */
+        .params-section {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 20px;
-            margin-bottom: 20px;
         }
-        
-        @media (max-width: 1200px) {
-            .main-grid { grid-template-columns: 1fr 1fr; }
+
+        @media (max-width: 1000px) {
+            .params-section { grid-template-columns: 1fr; }
         }
-        @media (max-width: 800px) {
-            .main-grid { grid-template-columns: 1fr; }
-        }
-        
-        /* 面板通用样式 */
+
+        /* 面板样式 */
         .panel {
             background: rgba(255, 255, 255, 0.05);
             border-radius: 16px;
@@ -66,7 +62,7 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .panel h2 {
             margin-bottom: 15px;
             font-size: 1.1rem;
@@ -74,7 +70,7 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .panel h2::before {
             content: '';
             display: inline-block;
@@ -82,278 +78,22 @@
             height: 8px;
             border-radius: 50%;
         }
-        
-        /* 分类颜色 */
-        .category-input h2::before { background: #00d4ff; }
-        .category-input h2 { color: #00d4ff; }
-        
-        .category-chatbox h2::before { background: #ff006e; }
-        .category-chatbox h2 { color: #ff006e; }
-        
-        .category-camera h2::before { background: #8338ec; }
-        .category-camera h2 { color: #8338ec; }
-        
-        .category-system h2::before { background: #ff9f1c; }
-        .category-system h2 { color: #ff9f1c; }
-        
-        .category-avatar h2::before { background: #00ff88; }
-        .category-avatar h2 { color: #00ff88; }
-        
-        .category-tracking h2::before { background: #06ffa5; }
-        .category-tracking h2 { color: #06ffa5; }
-        
-        /* 虚拟摇杆 */
-        .joystick-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        #joystickCanvas {
-            border-radius: 50%;
-            background: radial-gradient(circle at center, rgba(0, 212, 255, 0.1) 0%, rgba(0, 0, 0, 0.3) 100%);
-            border: 2px solid rgba(0, 212, 255, 0.3);
-            cursor: pointer;
-            touch-action: none;
-        }
-        
-        .joystick-values {
-            display: flex;
-            gap: 20px;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-        
-        .joystick-value { color: #00d4ff; }
-        
-        .quick-buttons {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 5px;
-            margin-top: 10px;
-        }
-        
-        .quick-btn {
-            padding: 8px;
-            background: rgba(0, 212, 255, 0.2);
-            border: 1px solid rgba(0, 212, 255, 0.3);
-            border-radius: 6px;
-            color: #fff;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-        
-        .quick-btn:hover { background: rgba(0, 212, 255, 0.4); }
-        .quick-btn:active { transform: scale(0.95); }
-        
-        /* 聊天框 */
-        .chatbox-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .chatbox-input {
-            width: 100%;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 0, 110, 0.3);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 0.9rem;
-            resize: vertical;
-            min-height: 60px;
-        }
-        
-        .chatbox-input:focus {
-            outline: none;
-            border-color: #ff006e;
-        }
-        
-        .chatbox-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .chatbox-btn {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #ff006e, #8338ec);
-            border: none;
-            border-radius: 8px;
-            color: #fff;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-        }
-        
-        .chatbox-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 0, 110, 0.4); }
-        
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: rgba(255, 0, 110, 0.1);
-            border-radius: 20px;
-            font-size: 0.8rem;
-        }
-        
-        .typing-dots {
-            display: flex;
-            gap: 3px;
-        }
-        
-        .typing-dot {
-            width: 6px;
-            height: 6px;
-            background: #ff006e;
-            border-radius: 50%;
-            animation: typing 1.4s infinite;
-        }
-        
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-10px); }
-        }
-        
-        /* 相机控制 */
-        .camera-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .camera-mode-select {
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(131, 56, 236, 0.3);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 0.9rem;
-            cursor: pointer;
-        }
-        
-        .camera-btn-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .camera-btn {
-            padding: 10px 16px;
-            background: rgba(131, 56, 236, 0.2);
-            border: 1px solid rgba(131, 56, 236, 0.3);
-            border-radius: 8px;
-            color: #fff;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-        
-        .camera-btn:hover { background: rgba(131, 56, 236, 0.4); }
-        .camera-btn.active { background: rgba(131, 56, 236, 0.6); }
-        
-        .camera-slider-container {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .camera-slider-label {
-            font-size: 0.8rem;
-            color: #888;
-        }
-        
-        .camera-slider {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .camera-slider input[type="range"] {
-            flex: 1;
-            -webkit-appearance: none;
-            height: 6px;
-            background: rgba(131, 56, 236, 0.2);
-            border-radius: 3px;
-            outline: none;
-        }
-        
-        .camera-slider input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #8338ec;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-        
-        .camera-slider-value {
-            min-width: 50px;
-            text-align: right;
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: #8338ec;
-        }
-        
-        /* 系统信息 */
-        .system-info {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .system-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            background: rgba(255, 159, 28, 0.1);
-            border-radius: 8px;
-            border: 1px solid rgba(255, 159, 28, 0.2);
-        }
-        
-        .system-label {
-            font-size: 0.85rem;
-            color: #888;
-        }
-        
-        .system-value {
-            font-family: monospace;
-            font-size: 0.9rem;
-            color: #ff9f1c;
-        }
-        
-        .avatar-id {
-            font-size: 0.75rem;
-            word-break: break-all;
-        }
-        
-        /* Avatar参数面板 */
-        .params-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        @media (max-width: 1000px) {
-            .params-section { grid-template-columns: 1fr; }
-        }
-        
+
+        .panel-input h2::before { background: #00d4ff; }
+        .panel-input h2 { color: #00d4ff; }
+
+        .panel-output h2::before { background: #00ff88; }
+        .panel-output h2 { color: #00ff88; }
+
+        /* 参数网格 */
         .param-grid {
             display: grid;
             gap: 10px;
-            max-height: 350px;
+            max-height: 70vh;
             overflow-y: auto;
         }
-        
+
+        /* 参数项样�?*/
         .param-item {
             background: rgba(0, 0, 0, 0.2);
             padding: 10px 12px;
@@ -363,30 +103,34 @@
             gap: 12px;
             transition: background 0.2s;
         }
-        
+
         .param-item:hover { background: rgba(0, 0, 0, 0.3); }
-        
+
         .param-name {
             font-weight: 500;
-            min-width: 90px;
+            min-width: 140px;
             font-size: 0.85rem;
+            word-break: break-all;
         }
-        
+
         .param-type {
             font-size: 0.65rem;
             color: #888;
             background: rgba(255, 255, 255, 0.1);
             padding: 2px 6px;
             border-radius: 4px;
+            min-width: 35px;
+            text-align: center;
         }
-        
+
+        /* 滑块容器 */
         .slider-container {
             flex: 1;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        
+
         input[type="range"] {
             flex: 1;
             -webkit-appearance: none;
@@ -395,7 +139,7 @@
             border-radius: 3px;
             outline: none;
         }
-        
+
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             width: 16px;
@@ -404,27 +148,28 @@
             border-radius: 50%;
             cursor: pointer;
         }
-        
+
         .value-display {
-            min-width: 35px;
+            min-width: 45px;
             text-align: right;
             font-family: monospace;
             font-size: 0.8rem;
             color: #00d4ff;
         }
-        
+
+        /* 开关样�?*/
         .switch {
             position: relative;
             width: 44px;
             height: 24px;
         }
-        
+
         .switch input {
             opacity: 0;
             width: 0;
             height: 0;
         }
-        
+
         .slider-switch {
             position: absolute;
             cursor: pointer;
@@ -436,7 +181,7 @@
             transition: 0.3s;
             border-radius: 24px;
         }
-        
+
         .slider-switch::before {
             position: absolute;
             content: "";
@@ -448,23 +193,24 @@
             transition: 0.3s;
             border-radius: 50%;
         }
-        
+
         input:checked + .slider-switch {
             background: linear-gradient(135deg, #00d4ff, #7b2cbf);
         }
-        
+
         input:checked + .slider-switch::before {
             transform: translateX(20px);
         }
-        
+
+        /* Output 显示样式 */
         .output-value {
-            min-width: 45px;
+            min-width: 60px;
             text-align: right;
             font-family: monospace;
             font-size: 0.8rem;
             color: #00ff88;
         }
-        
+
         .progress-bar {
             flex: 1;
             height: 6px;
@@ -472,14 +218,14 @@
             border-radius: 3px;
             overflow: hidden;
         }
-        
+
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, #00d4ff, #00ff88);
             border-radius: 3px;
             transition: width 0.1s ease-out;
         }
-        
+
         .bool-indicator {
             width: 10px;
             height: 10px;
@@ -487,246 +233,49 @@
             background: #444;
             transition: background 0.2s;
         }
-        
+
         .bool-indicator.active {
             background: #00ff88;
             box-shadow: 0 0 8px #00ff88;
         }
-        
-        /* Velocity可视化 */
-        .vector-panel {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            padding: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .vector-panel h2 {
-            margin-bottom: 15px;
-            font-size: 1.1rem;
-            color: #ff6b6b;
-        }
-        
-        .vector-display {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        #velocityCanvas {
-            border-radius: 12px;
-            background: rgba(0, 0, 0, 0.3);
-        }
-        
-        .vector-info {
-            flex: 1;
-            min-width: 180px;
-        }
-        
-        .vector-value {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 10px;
-            margin-bottom: 6px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 6px;
-        }
-        
-        .vector-label { color: #888; font-size: 0.85rem; }
-        .vector-num { font-family: monospace; font-size: 1rem; }
-        .velocity-x { color: #00d4ff; }
-        .velocity-y { color: #00ff88; }
-        .velocity-z { color: #ff6b6b; }
-        
-        /* 滚动条 */
+
+        /* 滚动�?*/
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
         ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+        /* 分类标签 */
+        .param-category {
+            font-size: 0.65rem;
+            color: #666;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: auto;
+        }
     </style>
 </head>
 <body>
     <div class="status-bar">
         <div class="status-dot" id="statusDot"></div>
-        <span id="statusText">连接中...</span>
+        <span id="statusText">连接�?..</span>
     </div>
 
     <div class="container">
         <h1>VRChat OSC Controller</h1>
-        
-        <!-- 顶部功能区 -->
-        <div class="main-grid">
-            <!-- 虚拟摇杆 -->
-            <div class="panel category-input">
-                <h2>🎮 虚拟摇杆 (移动控制)</h2>
-                <div class="joystick-container">
-                    <canvas id="joystickCanvas" width="180" height="180"></canvas>
-                    <div class="joystick-values">
-                        <span>X: <span class="joystick-value" id="joyX">0.00</span></span>
-                        <span>Y: <span class="joystick-value" id="joyY">0.00</span></span>
-                    </div>
-                    <div class="quick-buttons">
-                        <button class="quick-btn" onmousedown="sendInput('Jump', true)" onmouseup="sendInput('Jump', false)" ontouchstart="sendInput('Jump', true)" ontouchend="sendInput('Jump', false)">跳跃</button>
-                        <button class="quick-btn" onmousedown="sendInput('Run', true)" onmouseup="sendInput('Run', false)" ontouchstart="sendInput('Run', true)" ontouchend="sendInput('Run', false)">奔跑</button>
-                        <button class="quick-btn" onclick="toggleInput('Voice')">语音</button>
-                        <button class="quick-btn" onclick="toggleInput('AFKToggle')">AFK</button>
-                        <button class="quick-btn" onclick="stopMovement()" style="background: rgba(255, 0, 0, 0.3); border-color: rgba(255, 0, 0, 0.5);">🛑 停止</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 聊天框 -->
-            <div class="panel category-chatbox">
-                <h2>💬 Chatbox</h2>
-                <div class="chatbox-container">
-                    <textarea class="chatbox-input" id="chatboxText" placeholder="输入消息... (Enter发送)" maxlength="144"></textarea>
-                    <div class="chatbox-controls">
-                        <button class="chatbox-btn" onclick="sendChatbox()">发送</button>
-                        <div class="typing-indicator" id="typingIndicator" style="display: none;">
-                            <span>输入中</span>
-                            <div class="typing-dots">
-                                <div class="typing-dot"></div>
-                                <div class="typing-dot"></div>
-                                <div class="typing-dot"></div>
-                            </div>
-                        </div>
-                        <label style="display: flex; align-items: center; gap: 5px; font-size: 0.8rem;">
-                            <input type="checkbox" id="chatboxNotify" checked> 通知音
-                        </label>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 相机控制 -->
-            <div class="panel category-camera">
-                <h2>📷 相机控制</h2>
-                <div class="camera-controls">
-                    <select class="camera-mode-select" id="cameraMode" onchange="setCameraMode(this.value)">
-                        <option value="0">关闭相机</option>
-                        <option value="1">拍照模式</option>
-                        <option value="2">直播模式</option>
-                        <option value="3">表情模式</option>
-                        <option value="4">多层模式</option>
-                        <option value="5">打印模式</option>
-                        <option value="6">无人机模式</option>
-                    </select>
-                    
-                    <div class="camera-btn-group">
-                        <button class="camera-btn" onclick="sendCameraAction('Capture')">📸 拍照</button>
-                        <button class="camera-btn" onclick="sendCameraAction('CaptureDelayed')">⏱️ 延时</button>
-                        <button class="camera-btn" onclick="sendCameraAction('Close')">❌ 关闭</button>
-                    </div>
-                    
-                    <div class="camera-slider-container">
-                        <span class="camera-slider-label">缩放</span>
-                        <div class="camera-slider">
-                            <input type="range" min="20" max="150" value="45" id="cameraZoom" oninput="setCameraParam('Zoom', this.value)">
-                            <span class="camera-slider-value" id="zoomValue">45</span>
-                        </div>
-                    </div>
-                    
-                    <div class="camera-slider-container">
-                        <span class="camera-slider-label">曝光</span>
-                        <div class="camera-slider">
-                            <input type="range" min="-10" max="4" value="0" step="0.1" id="cameraExposure" oninput="setCameraParam('Exposure', this.value)">
-                            <span class="camera-slider-value" id="exposureValue">0</span>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px;">
-                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
-                            <input type="checkbox" onchange="toggleCameraToggle('ShowUIInCamera', this.checked)"> 显示UI
-                        </label>
-                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
-                            <input type="checkbox" onchange="toggleCameraToggle('LocalPlayer', this.checked)"> 本地玩家
-                        </label>
-                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
-                            <input type="checkbox" onchange="toggleCameraToggle('GreenScreen', this.checked)"> 绿幕
-                        </label>
-                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 5px;">
-                            <input type="checkbox" onchange="toggleCameraToggle('Streaming', this.checked)"> 推流
-                        </label>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 系统信息 -->
-            <div class="panel category-system">
-                <h2>ℹ️ 系统信息</h2>
-                <div class="system-info" id="systemInfo">
-                    <div class="system-item">
-                        <span class="system-label">Avatar ID</span>
-                        <span class="system-value avatar-id" id="systemAvatarId">-</span>
-                    </div>
-                    <div class="system-item">
-                        <span class="system-label">VR Mode</span>
-                        <span class="system-value" id="systemVRMode">-</span>
-                    </div>
-                    <div class="system-item">
-                        <span class="system-label">Tracking Type</span>
-                        <span class="system-value" id="systemTracking">-</span>
-                    </div>
-                    <div class="system-item">
-                        <span class="system-label">Eye Height</span>
-                        <span class="system-value" id="systemEyeHeight">-</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Tracking信息 -->
-            <div class="panel category-tracking">
-                <h2>🎯 追踪数据</h2>
-                <div class="system-info" id="trackingInfo">
-                    <div class="system-item">
-                        <span class="system-label">Head Pos</span>
-                        <span class="system-value" id="trackingHeadPos">-</span>
-                    </div>
-                    <div class="system-item">
-                        <span class="system-label">Head Rot</span>
-                        <span class="system-value" id="trackingHeadRot">-</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Avatar参数区 -->
+
         <div class="params-section">
-            <div class="panel category-avatar">
-                <h2>🎭 Avatar Input 控制</h2>
-                <div class="param-grid" id="avatarInputPanel"></div>
+            <!-- Input 参数面板 -->
+            <div class="panel panel-input">
+                <h2>🎮 Input 参数</h2>
+                <div class="param-grid" id="inputPanel"></div>
             </div>
-            
-            <div class="panel category-avatar">
-                <h2>📊 Avatar Output 监控</h2>
-                <div class="param-grid" id="avatarOutputPanel"></div>
-            </div>
-        </div>
-        
-        <!-- Velocity可视化 -->
-        <div class="vector-panel">
-            <h2>📈 Velocity 向量可视化 (X/Z平面, 最大边界: 3m/s)</h2>
-            <div class="vector-display">
-                <canvas id="velocityCanvas" width="300" height="300"></canvas>
-                <div class="vector-info">
-                    <div class="vector-value">
-                        <span class="vector-label">Velocity X (横向):</span>
-                        <span class="vector-num velocity-x" id="velX">0.000</span>
-                    </div>
-                    <div class="vector-value">
-                        <span class="vector-label">Velocity Y (高度):</span>
-                        <span class="vector-num velocity-y" id="velY">0.000</span>
-                    </div>
-                    <div class="vector-value">
-                        <span class="vector-label">Velocity Z (纵向):</span>
-                        <span class="vector-num velocity-z" id="velZ">0.000</span>
-                    </div>
-                    <div class="vector-value">
-                        <span class="vector-label">Magnitude:</span>
-                        <span class="vector-num" id="velMag">0.000</span>
-                    </div>
-                </div>
+
+            <!-- Output 参数面板 -->
+            <div class="panel panel-output">
+                <h2>📊 Output 参数</h2>
+                <div class="param-grid" id="outputPanel"></div>
             </div>
         </div>
     </div>
@@ -735,28 +284,32 @@
         // 全局变量
         const parameters = {};
         let ws = null;
-        const velocity = { x: 0, y: 0, z: 0, magnitude: 0 };
-        
+
         // ===== WebSocket连接 =====
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            console.log('[WebSocket] Connecting to:', wsUrl);
             
+            ws = new WebSocket(wsUrl);
+
             ws.onopen = () => {
+                console.log('[WebSocket] Connected successfully');
                 document.getElementById('statusDot').classList.add('connected');
                 document.getElementById('statusText').textContent = '已连接';
             };
-            
-            ws.onclose = () => {
+
+            ws.onclose = (event) => {
+                console.log('[WebSocket] Closed:', event.code, event.reason);
                 document.getElementById('statusDot').classList.remove('connected');
                 document.getElementById('statusText').textContent = '已断开，重连中...';
                 setTimeout(connect, 2000);
             };
-            
+
             ws.onerror = (err) => {
                 console.error('[WebSocket] Error:', err);
             };
-            
+
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
@@ -766,73 +319,195 @@
                 }
             };
         }
-        
+
         // ===== 消息处理 =====
         function handleMessage(msg) {
             switch(msg.type) {
                 case 'init':
+                    console.log('[WebSocket] Received init with', msg.parameters.length, 'parameters');
+                    console.log('[WebSocket] First param:', msg.parameters[0]);
                     msg.parameters.forEach(p => {
                         parameters[p.name] = p;
                     });
                     renderUI();
                     break;
-                    
+
                 case 'output':
                     if (parameters[msg.name]) {
                         parameters[msg.name].value = msg.value;
-                        updateOutput(msg);
+                        updateOutputDisplay(msg.name, msg.value);
                     }
                     break;
-                    
+
                 case 'input':
                     if (parameters[msg.name]) {
                         parameters[msg.name].value = msg.value;
-                        updateInputUI(msg.name, msg.value);
+                        updateInputDisplay(msg.name, msg.value);
                     }
                     break;
             }
         }
-        
-        // ===== 更新输出显示 =====
-        function updateOutput(msg) {
-            const { name, value, category } = msg;
-            
-            // 系统信息
-            if (category === 'system') {
-                if (name === 'System_AvatarID') {
-                    document.getElementById('systemAvatarId').textContent = value || '-';
-                } else if (name === 'System_VRMode') {
-                    document.getElementById('systemVRMode').textContent = value === 1 ? 'VR' : 'Desktop';
-                } else if (name === 'System_TrackingType') {
-                    const types = ['无', 'HMD', 'HMD+手', 'HMD+手+身体'];
-                    document.getElementById('systemTracking').textContent = types[value] || value;
-                } else if (name === 'System_EyeHeightAsMeters') {
-                    document.getElementById('systemEyeHeight').textContent = value ? value.toFixed(2) + 'm' : '-';
+
+        // ===== 渲染UI =====
+        function renderUI() {
+            const inputPanel = document.getElementById('inputPanel');
+            const outputPanel = document.getElementById('outputPanel');
+
+            inputPanel.innerHTML = '';
+            outputPanel.innerHTML = '';
+
+            console.log('[Render] Total parameters:', Object.keys(parameters).length);
+
+            let inputCount = 0;
+            let outputCount = 0;
+
+            Object.values(parameters).forEach(param => {
+                // 提取参数类别前缀
+                const categoryPrefix = param.name.split('_')[0];
+
+                if (param.isInput) {
+                    const el = createInputControl(param, categoryPrefix);
+                    inputPanel.appendChild(el);
+                    inputCount++;
                 }
-                return;
+
+                if (param.isOutput) {
+                    const el = createOutputDisplay(param, categoryPrefix);
+                    outputPanel.appendChild(el);
+                    outputCount++;
+                }
+            });
+
+            console.log(`[Render] Input: ${inputCount}, Output: ${outputCount}`);
+        }
+
+        // ===== 创建Input控件 =====
+        function createInputControl(param, category) {
+            const div = document.createElement('div');
+            div.className = 'param-item';
+            div.dataset.name = param.name;
+
+            let controlHTML = '';
+
+            if (param.type === 'Bool') {
+                const checked = param.value ? 'checked' : '';
+                controlHTML = `
+                    <span class="param-name">${param.displayName || param.name}</span>
+                    <span class="param-type">${param.type}</span>
+                    <label class="switch">
+                        <input type="checkbox" ${checked} onchange="sendParamValue('${param.name}', this.checked)">
+                        <span class="slider-switch"></span>
+                    </label>
+                    <span class="param-category">${category}</span>
+                `;
+            } else if (param.type === 'String') {
+                // String 类型显示为文本输入
+                const value = param.value || '';
+                controlHTML = `
+                    <span class="param-name">${param.displayName || param.name}</span>
+                    <span class="param-type">${param.type}</span>
+                    <input type="text" value="${value}" style="flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:5px 10px; border-radius:4px;"
+                           onchange="sendParamValue('${param.name}', this.value)">
+                    <span class="param-category">${category}</span>
+                `;
+            } else {
+                // Int/Float 使用滑块
+                const min = param.min !== undefined ? param.min : 0;
+                const max = param.max !== undefined ? param.max : (param.type === 'Int' ? 255 : 1);
+                const step = param.type === 'Int' ? 1 : 0.01;
+                const value = param.value !== null ? param.value : min;
+
+                controlHTML = `
+                    <span class="param-name">${param.displayName || param.name}</span>
+                    <span class="param-type">${param.type}</span>
+                    <div class="slider-container">
+                        <input type="range" min="${min}" max="${max}" step="${step}"
+                               value="${value}"
+                               oninput="handleSliderChange('${param.name}', this.value, '${param.type}')">
+                        <span class="value-display" id="val-${param.displayName || param.name}">${Number(value).toFixed(param.type === 'Int' ? 0 : 2)}</span>
+                    </div>
+                    <span class="param-category">${category}</span>
+                `;
             }
-            
-            // Tracking数据
-            if (category === 'tracking') {
-                updateTrackingDisplay();
-                return;
+
+            div.innerHTML = controlHTML;
+            return div;
+        }
+
+        // ===== 创建Output显示 =====
+        function createOutputDisplay(param, category) {
+            const div = document.createElement('div');
+            div.className = 'param-item';
+            div.dataset.name = param.name;
+
+            let displayHTML = '';
+
+            if (param.type === 'Bool') {
+                const active = param.value ? 'active' : '';
+                const status = param.value ? 'ON' : 'OFF';
+                displayHTML = `
+                    <span class="param-name">${param.displayName || param.name}</span>
+                    <span class="param-type">${param.type}</span>
+                    <div class="bool-indicator ${active}" id="out-${param.name}"></div>
+                    <span class="output-value" id="val-out-${param.name}">${status}</span>
+                    <span class="param-category">${category}</span>
+                `;
+            } else if (param.type === 'String') {
+                const value = param.value || '-';
+                displayHTML = `
+                    <span class="param-name">${param.displayName || param.name}</span>
+                    <span class="param-type">${param.type}</span>
+                    <span class="output-value" id="val-out-${param.name}" style="flex:1; text-align:left; margin-left:10px; overflow:hidden; text-overflow:ellipsis;">${value}</span>
+                    <span class="param-category">${category}</span>
+                `;
+            } else {
+                // Int/Float 使用进度条
+                const value = param.value !== null ? param.value : 0;
+                const min = param.min !== undefined ? param.min : 0;
+                const max = param.max !== undefined ? param.max : 1;
+                const percent = max !== min ? ((value - min) / (max - min) * 100) : 0;
+                const displayValue = param.type === 'Int' ? value : value.toFixed(3);
+
+                displayHTML = `
+                    <span class="param-name">${param.displayName || param.name}</span>
+                    <span class="param-type">${param.type}</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="bar-${param.name}" style="width: ${Math.max(0, Math.min(100, percent))}%"></div>
+                    </div>
+                    <span class="output-value" id="val-out-${param.name}">${displayValue}</span>
+                    <span class="param-category">${category}</span>
+                `;
             }
-            
-            // Avatar参数
+
+            div.innerHTML = displayHTML;
+            return div;
+        }
+
+        // ===== 滑块处理 =====
+        function handleSliderChange(name, value, type) {
+            const display = document.getElementById(`val-${name}`);
+            if (display) {
+                display.textContent = type === 'Int' ? parseInt(value) : parseFloat(value).toFixed(2);
+            }
+            sendParamValue(name, type === 'Int' ? parseInt(value) : parseFloat(value));
+        }
+
+        // ===== 发送参数�?=====
+        function sendParamValue(name, value) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            ws.send(JSON.stringify({
+                type: 'set',
+                name: name,
+                value: value
+            }));
+        }
+
+        // ===== 更新Output显示 =====
+        function updateOutputDisplay(name, value) {
             const param = parameters[name];
             if (!param) return;
-            
-            // 更新Velocity
-            if (['VelocityX', 'VelocityY', 'VelocityZ', 'VelocityMagnitude'].includes(name)) {
-                if (name === 'VelocityX') velocity.x = value;
-                if (name === 'VelocityY') velocity.y = value;
-                if (name === 'VelocityZ') velocity.z = value;
-                if (name === 'VelocityMagnitude') velocity.magnitude = value;
-                updateVelocityDisplay();
-                return;
-            }
-            
-            // 更新UI
+
             if (param.type === 'Bool') {
                 const indicator = document.getElementById(`out-${name}`);
                 const valDisplay = document.getElementById(`val-out-${name}`);
@@ -844,596 +519,49 @@
                     }
                 }
                 if (valDisplay) valDisplay.textContent = (value === 1 || value === true) ? 'ON' : 'OFF';
+            } else if (param.type === 'String') {
+                const valDisplay = document.getElementById(`val-out-${name}`);
+                if (valDisplay) valDisplay.textContent = value || '-';
             } else {
                 const bar = document.getElementById(`bar-${name}`);
                 const valDisplay = document.getElementById(`val-out-${name}`);
-                
-                if (valDisplay) valDisplay.textContent = typeof value === 'number' ? value.toFixed(3) : value;
-                
+
+                const min = param.min !== undefined ? param.min : 0;
+                const max = param.max !== undefined ? param.max : 1;
+                const percent = max !== min ? ((value - min) / (max - min) * 100) : 0;
+
+                if (valDisplay) {
+                    valDisplay.textContent = param.type === 'Int' ? value : value.toFixed(3);
+                }
                 if (bar) {
-                    const min = param.min || 0;
-                    const max = param.max || 1;
-                    const percent = ((value - min) / (max - min)) * 100;
                     bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
                 }
             }
         }
-        
-        // ===== 更新Tracking显示 =====
-        function updateTrackingDisplay() {
-            const headPos = ['Tracking_HeadPosX', 'Tracking_HeadPosY', 'Tracking_HeadPosZ']
-                .map(n => parameters[n]?.value?.toFixed(2) || '0.00');
-            const headRot = ['Tracking_HeadRotX', 'Tracking_HeadRotY', 'Tracking_HeadRotZ']
-                .map(n => parameters[n]?.value?.toFixed(1) || '0.0');
-            
-            document.getElementById('trackingHeadPos').textContent = `X:${headPos[0]} Y:${headPos[1]} Z:${headPos[2]}`;
-            document.getElementById('trackingHeadRot').textContent = `X:${headRot[0]}° Y:${headRot[1]}° Z:${headRot[2]}°`;
-        }
-        
-        // ===== 渲染UI =====
-        function renderUI() {
-            const avatarInputPanel = document.getElementById('avatarInputPanel');
-            const avatarOutputPanel = document.getElementById('avatarOutputPanel');
-            
-            avatarInputPanel.innerHTML = '';
-            avatarOutputPanel.innerHTML = '';
-            
-            Object.values(parameters).forEach(param => {
-                if (param.category === 'avatar') {
-                    if (param.isInput) {
-                        const el = createInputControl(param);
-                        avatarInputPanel.appendChild(el);
-                    }
-                    if (param.isOutput) {
-                        const el = createOutputDisplay(param);
-                        avatarOutputPanel.appendChild(el);
-                    }
-                }
-            });
-        }
-        
-        // ===== 创建输入控件 =====
-        function createInputControl(param) {
-            const div = document.createElement('div');
-            div.className = 'param-item';
-            div.dataset.name = param.name;
-            
-            let controlHTML = '';
-            
-            if (param.type === 'Bool') {
-                const checked = param.value ? 'checked' : '';
-                controlHTML = `
-                    <span class="param-name">${param.name}</span>
-                    <span class="param-type">${param.type}</span>
-                    <label class="switch">
-                        <input type="checkbox" ${checked} onchange="sendParamValue('${param.name}', this.checked ? 1 : 0)">
-                        <span class="slider-switch"></span>
-                    </label>
-                `;
-            } else {
-                const min = param.min !== undefined ? param.min : 0;
-                const max = param.max !== undefined ? param.max : (param.type === 'Int' ? 8 : 1);
-                const step = param.type === 'Int' ? 1 : 0.01;
-                const value = param.value !== null ? param.value : min;
-                
-                controlHTML = `
-                    <span class="param-name">${param.name}</span>
-                    <span class="param-type">${param.type}</span>
-                    <div class="slider-container">
-                        <input type="range" min="${min}" max="${max}" step="${step}" 
-                               value="${value}" 
-                               oninput="handleSliderChange('${param.name}', this.value, '${param.type}')">
-                        <span class="value-display" id="val-${param.name}">${value}</span>
-                    </div>
-                `;
-            }
-            
-            div.innerHTML = controlHTML;
-            return div;
-        }
-        
-        // ===== 创建输出显示 =====
-        function createOutputDisplay(param) {
-            const div = document.createElement('div');
-            div.className = 'param-item';
-            div.dataset.name = param.name;
-            
-            let displayHTML = '';
-            
-            if (param.type === 'Bool') {
-                const active = param.value ? 'active' : '';
-                displayHTML = `
-                    <span class="param-name">${param.name}</span>
-                    <span class="param-type">${param.type}</span>
-                    <div class="bool-indicator ${active}" id="out-${param.name}"></div>
-                    <span class="output-value" id="val-out-${param.name}">${param.value ? 'ON' : 'OFF'}</span>
-                `;
-            } else {
-                const value = param.value !== null ? param.value.toFixed(3) : '0.000';
-                const min = param.min || 0;
-                const max = param.max || 1;
-                const percent = param.value !== null 
-                    ? ((param.value - min) / (max - min) * 100) 
-                    : 0;
-                
-                displayHTML = `
-                    <span class="param-name">${param.name}</span>
-                    <span class="param-type">${param.type}</span>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="bar-${param.name}" style="width: ${Math.max(0, Math.min(100, percent))}%"></div>
-                    </div>
-                    <span class="output-value" id="val-out-${param.name}">${value}</span>
-                `;
-            }
-            
-            div.innerHTML = displayHTML;
-            return div;
-        }
-        
-        // ===== 滑块处理 =====
-        function handleSliderChange(name, value, type) {
-            document.getElementById(`val-${name}`).textContent = value;
-            const numValue = type === 'Int' ? parseInt(value) : parseFloat(value);
-            sendParamValue(name, numValue);
-        }
-        
-        function updateInputUI(name, value) {
+
+        // ===== 更新Input显示 =====
+        function updateInputDisplay(name, value) {
             const param = parameters[name];
-            if (!param || param.category !== 'avatar') return;
-            
+            if (!param) return;
+
             const item = document.querySelector(`.param-item[data-name="${name}"]`);
             if (!item) return;
-            
+
             if (param.type === 'Bool') {
                 const checkbox = item.querySelector('input[type="checkbox"]');
                 if (checkbox) checkbox.checked = value === 1 || value === true;
-            } else {
+            } else if (param.type !== 'String') {
                 const slider = item.querySelector('input[type="range"]');
-                const display = item.querySelector('.value-display');
+                const display = document.getElementById(`val-${name}`);
                 if (slider) slider.value = value;
-                if (display) display.textContent = value;
-            }
-        }
-        
-        // ===== 发送参数值 =====
-        function sendParamValue(name, value) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'set', name: name, value: value }));
-            }
-        }
-        
-        // ===== Input控制 =====
-        function sendInput(action, value) {
-            const paramName = `Input_${action}`;
-            if (parameters[paramName]) {
-                sendParamValue(paramName, value);
-            }
-        }
-        
-        // 紧急停止移动
-        function stopMovement() {
-            console.log('[Emergency Stop] Stopping all movement');
-            
-            // 重置摇杆状态
-            if (joystick) {
-                joystick.isDragging = false;
-                joystick.x = 0;
-                joystick.y = 0;
-                joystick.draw();
-                document.getElementById('joyX').textContent = '0.00';
-                document.getElementById('joyY').textContent = '0.00';
-            }
-            
-            // 发送0值停止移动
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_Horizontal', value: 0 }));
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_Vertical', value: 0 }));
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_MoveForward', value: false }));
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_MoveBackward', value: false }));
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_MoveLeft', value: false }));
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_MoveRight', value: false }));
-            }
-            
-            // 显示提示
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = '✓ 已停止';
-            setTimeout(() => {
-                btn.textContent = originalText;
-            }, 1000);
-        }
-        
-        function toggleInput(action) {
-            const paramName = `Input_${action}`;
-            if (parameters[paramName]) {
-                const current = parameters[paramName].value;
-                sendParamValue(paramName, current ? false : true);
-            }
-        }
-        
-        // ===== Chatbox =====
-        function sendChatbox() {
-            const text = document.getElementById('chatboxText').value.trim();
-            if (!text) return;
-            
-            const notification = document.getElementById('chatboxNotify').checked;
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'chatbox',
-                    text: text,
-                    send: true,
-                    notification: notification
-                }));
-                
-                document.getElementById('chatboxText').value = '';
-            }
-        }
-        
-        // Enter发送
-        document.getElementById('chatboxText')?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendChatbox();
-            }
-        });
-        
-        // ===== 相机控制 =====
-        function setCameraMode(mode) {
-            sendParamValue('Camera_Mode', parseInt(mode));
-        }
-        
-        function sendCameraAction(action) {
-            sendParamValue(`Camera_${action}`, true);
-        }
-        
-        function setCameraParam(param, value) {
-            document.getElementById(`${param.toLowerCase()}Value`).textContent = value;
-            sendParamValue(`Camera_${param}`, parseFloat(value));
-        }
-        
-        function toggleCameraToggle(param, value) {
-            sendParamValue(`Camera_${param}`, value);
-        }
-        
-        // ===== 虚拟摇杆 =====
-        class VirtualJoystick {
-            constructor(canvasId) {
-                this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas.getContext('2d');
-                this.centerX = this.canvas.width / 2;
-                this.centerY = this.canvas.height / 2;
-                this.radius = 70;
-                this.knobRadius = 25;
-                this.x = 0;
-                this.y = 0;
-                this.isDragging = false;
-                this.touchId = null;
-                this.lastSentX = null;
-                this.lastSentY = null;
-                this.heartbeatInterval = null;
-                
-                this.setupEvents();
-                this.startHeartbeat();
-                this.draw();
-            }
-            
-            startHeartbeat() {
-                // VRChat需要持续接收Input值，每50ms发送一次心跳
-                this.heartbeatInterval = setInterval(() => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        // 只有当值有变化或者是0值时才发送
-                        const normalizedX = parseFloat((this.x / this.radius).toFixed(3));
-                        const normalizedY = parseFloat((-this.y / this.radius).toFixed(3));
-                        
-                        const finalX = Math.abs(normalizedX) < 0.001 ? 0.0 : normalizedX;
-                        const finalY = Math.abs(normalizedY) < 0.001 ? 0.0 : normalizedY;
-                        
-                        // 如果值变化了，或者是非零值需要持续发送
-                        if (finalX !== this.lastSentX || finalY !== this.lastSentY || finalX !== 0.0 || finalY !== 0.0) {
-                            this.sendDirectValues(finalX, finalY);
-                            this.lastSentX = finalX;
-                            this.lastSentY = finalY;
-                        }
-                    }
-                }, 50); // 20Hz更新率
-            }
-            
-            sendDirectValues(x, y) {
-                if (parameters['Input_Horizontal']) {
-                    ws.send(JSON.stringify({
-                        type: 'set',
-                        name: 'Input_Horizontal',
-                        value: x
-                    }));
-                }
-                if (parameters['Input_Vertical']) {
-                    ws.send(JSON.stringify({
-                        type: 'set',
-                        name: 'Input_Vertical',
-                        value: y
-                    }));
+                if (display) {
+                    display.textContent = param.type === 'Int' ? parseInt(value) : parseFloat(value).toFixed(2);
                 }
             }
-            
-            setupEvents() {
-                // 鼠标事件
-                this.canvas.addEventListener('mousedown', (e) => this.start(e.offsetX, e.offsetY));
-                window.addEventListener('mousemove', (e) => this.move(e));
-                window.addEventListener('mouseup', () => this.end());
-                // 鼠标离开画布时停止
-                this.canvas.addEventListener('mouseleave', () => this.end());
-                // 窗口失去焦点时停止
-                window.addEventListener('blur', () => this.end());
-                
-                // 触摸事件
-                this.canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const rect = this.canvas.getBoundingClientRect();
-                    this.start(touch.clientX - rect.left, touch.clientY - rect.top);
-                }, { passive: false });
-                
-                this.canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const rect = this.canvas.getBoundingClientRect();
-                    this.moveTouch(touch.clientX - rect.left, touch.clientY - rect.top);
-                }, { passive: false });
-                
-                this.canvas.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    this.end();
-                });
-                
-                // 触摸取消时停止
-                this.canvas.addEventListener('touchcancel', (e) => {
-                    e.preventDefault();
-                    this.end();
-                });
-            }
-            
-            start(x, y) {
-                this.isDragging = true;
-                this.updatePosition(x, y);
-            }
-            
-            move(e) {
-                if (!this.isDragging) return;
-                const rect = this.canvas.getBoundingClientRect();
-                this.updatePosition(e.clientX - rect.left, e.clientY - rect.top);
-            }
-            
-            moveTouch(x, y) {
-                if (!this.isDragging) return;
-                this.updatePosition(x, y);
-            }
-            
-            updatePosition(x, y) {
-                const dx = x - this.centerX;
-                const dy = y - this.centerY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > this.radius) {
-                    const angle = Math.atan2(dy, dx);
-                    this.x = Math.cos(angle) * this.radius;
-                    this.y = Math.sin(angle) * this.radius;
-                } else {
-                    this.x = dx;
-                    this.y = dy;
-                }
-                
-                this.sendValues();
-                this.draw();
-            }
-            
-            end() {
-                this.isDragging = false;
-                this.x = 0;
-                this.y = 0;
-                
-                // 立即发送0值（通过心跳机制会继续保持）
-                this.lastSentX = null; // 强制下一次心跳发送
-                this.lastSentY = null;
-                this.sendDirectValues(0.0, 0.0);
-                
-                this.draw();
-            }
-            
-            destroy() {
-                if (this.heartbeatInterval) {
-                    clearInterval(this.heartbeatInterval);
-                }
-            }
-            
-            sendValues() {
-                // 归一化到 -1.0 ~ 1.0，并确保0值精确
-                let normalizedX = parseFloat((this.x / this.radius).toFixed(3));
-                let normalizedY = parseFloat((-this.y / this.radius).toFixed(3)); // Y轴翻转
-                
-                // 防止-0的情况
-                if (Math.abs(normalizedX) < 0.001) normalizedX = 0;
-                if (Math.abs(normalizedY) < 0.001) normalizedY = 0;
-                
-                document.getElementById('joyX').textContent = normalizedX.toFixed(2);
-                document.getElementById('joyY').textContent = normalizedY.toFixed(2);
-                
-                // 发送Input_Horizontal和Input_Vertical
-                if (parameters['Input_Horizontal'] && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'set',
-                        name: 'Input_Horizontal',
-                        value: normalizedX
-                    }));
-                }
-                if (parameters['Input_Vertical'] && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'set',
-                        name: 'Input_Vertical',
-                        value: normalizedY
-                    }));
-                }
-                
-                // 调试日志
-                console.log(`[Joystick] X: ${normalizedX}, Y: ${normalizedY}`);
-            }
-            
-            draw() {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                
-                // 外圈
-                this.ctx.beginPath();
-                this.ctx.arc(this.centerX, this.centerY, this.radius, 0, Math.PI * 2);
-                this.ctx.strokeStyle = 'rgba(0, 212, 255, 0.3)';
-                this.ctx.lineWidth = 2;
-                this.ctx.stroke();
-                
-                // 十字线
-                this.ctx.beginPath();
-                this.ctx.moveTo(this.centerX - this.radius, this.centerY);
-                this.ctx.lineTo(this.centerX + this.radius, this.centerY);
-                this.ctx.moveTo(this.centerX, this.centerY - this.radius);
-                this.ctx.lineTo(this.centerX, this.centerY + this.radius);
-                this.ctx.strokeStyle = 'rgba(0, 212, 255, 0.2)';
-                this.ctx.lineWidth = 1;
-                this.ctx.stroke();
-                
-                // 摇杆头
-                this.ctx.beginPath();
-                this.ctx.arc(this.centerX + this.x, this.centerY + this.y, this.knobRadius, 0, Math.PI * 2);
-                this.ctx.fillStyle = 'rgba(0, 212, 255, 0.6)';
-                this.ctx.fill();
-                
-                // 发光效果
-                this.ctx.beginPath();
-                this.ctx.arc(this.centerX + this.x, this.centerY + this.y, this.knobRadius + 5, 0, Math.PI * 2);
-                this.ctx.fillStyle = 'rgba(0, 212, 255, 0.2)';
-                this.ctx.fill();
-            }
         }
-        
-        // ===== Velocity可视化 =====
-        function updateVelocityDisplay() {
-            document.getElementById('velX').textContent = velocity.x.toFixed(3);
-            document.getElementById('velY').textContent = velocity.y.toFixed(3);
-            document.getElementById('velZ').textContent = velocity.z.toFixed(3);
-            document.getElementById('velMag').textContent = velocity.magnitude.toFixed(3);
-            
-            drawVelocityVector();
-        }
-        
-        function drawVelocityVector() {
-            const canvas = document.getElementById('velocityCanvas');
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width;
-            const h = canvas.height;
-            const cx = w / 2;
-            const cy = h / 2;
-            
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.fillRect(0, 0, w, h);
-            
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
-            
-            const maxBound = 3;
-            const scale = 130 / maxBound;
-            
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'left';
-            for (let i = 1; i <= 3; i++) {
-                const r = i * scale;
-                ctx.beginPath();
-                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.fillText(i.toString(), cx + r + 2, cy - 2);
-            }
-            
-            ctx.beginPath();
-            ctx.moveTo(cx, 20);
-            ctx.lineTo(cx, h - 20);
-            ctx.moveTo(20, cy);
-            ctx.lineTo(w - 20, cy);
-            ctx.stroke();
-            
-            ctx.fillStyle = '#00d4ff';
-            ctx.font = '14px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText('X', w - 35, cy + 5);
-            ctx.fillText('-X', 25, cy + 5);
-            
-            ctx.fillStyle = '#ff6b6b';
-            ctx.textAlign = 'center';
-            ctx.fillText('-Z', cx, 35);
-            ctx.fillText('Z', cx, h - 15);
-            
-            const vx = velocity.x * scale;
-            const vy = -velocity.z * scale;
-            
-            ctx.strokeStyle = '#00ff88';
-            ctx.fillStyle = '#00ff88';
-            ctx.lineWidth = 3;
-            
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + vx, cy + vy);
-            ctx.stroke();
-            
-            const angle = Math.atan2(vy, vx);
-            const headLen = 10;
-            ctx.beginPath();
-            ctx.moveTo(cx + vx, cy + vy);
-            ctx.lineTo(cx + vx - headLen * Math.cos(angle - Math.PI / 6), cy + vy - headLen * Math.sin(angle - Math.PI / 6));
-            ctx.moveTo(cx + vx, cy + vy);
-            ctx.lineTo(cx + vx - headLen * Math.cos(angle + Math.PI / 6), cy + vy - headLen * Math.sin(angle + Math.PI / 6));
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-            ctx.fillStyle = '#fff';
-            ctx.fill();
-            
-            if (velocity.magnitude > 0.01) {
-                ctx.beginPath();
-                ctx.arc(cx + vx, cy + vy, 6, 0, Math.PI * 2);
-                ctx.fillStyle = '#00ff88';
-                ctx.fill();
-                
-                ctx.beginPath();
-                ctx.arc(cx + vx, cy + vy, 12, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(0, 255, 136, 0.3)';
-                ctx.fill();
-            }
-        }
-        
-        // ===== 初始化 =====
-        let joystick;
-        
-        window.onload = () => {
-            connect();
-            joystick = new VirtualJoystick('joystickCanvas');
-            drawVelocityVector();
-        };
-        
-        // 页面关闭/刷新时发送停止信号
-        window.addEventListener('beforeunload', () => {
-            if (joystick) {
-                joystick.destroy();
-            }
-            // 同步发送停止信号
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_Horizontal', value: 0.0 }));
-                ws.send(JSON.stringify({ type: 'set', name: 'Input_Vertical', value: 0.0 }));
-            }
-        });
-        
-        // 页面隐藏时发送停止信号
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && joystick) {
-                joystick.end();
-            }
-        });
+
+        // ===== 初始�?=====
+        connect();
     </script>
 </body>
 </html>

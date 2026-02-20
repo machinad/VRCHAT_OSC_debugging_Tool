@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-VRChat OSC Controller - 完整版
-支持所有VRChat OSC参数：Avatar参数、Input控制、Chatbox、Camera等
+VRChat OSC Controller - 基于 VRChat Wiki 官方参数规范
+支持标准 OSC 参数，可选 JSON 文件扩展
 """
 
 import asyncio
 import json
 import os
+from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -26,6 +28,9 @@ WEB_PORT = 8080
 # 参数配置文件路径
 CONFIG_FILE = "avtr_46040475-8cfe-410f-9744-cdaa117887bc.json"
 
+# 是否加载 JSON 文件扩展参数（可通过环境变量控制）
+LOAD_JSON_PARAMS = os.getenv("LOAD_JSON_PARAMS", "false").lower() == "true"
+
 
 @dataclass
 class Parameter:
@@ -38,72 +43,1215 @@ class Parameter:
     is_input: bool = False
     is_output: bool = False
     category: str = "avatar"  # 参数类别
+    description: str = ""  # 参数描述
+    display_name: str = ""  # 中文显示名
 
 
-# 系统级OSC参数定义
-SYSTEM_PARAMETERS = {
-    # ===== Input 控制 (Write-only) =====
-    "Input_Horizontal": {"address": "/input/Horizontal", "type": "Float", "min": -1.0, "max": 1.0, "category": "input"},
-    "Input_Vertical": {"address": "/input/Vertical", "type": "Float", "min": -1.0, "max": 1.0, "category": "input"},
-    "Input_LookHorizontal": {"address": "/input/LookHorizontal", "type": "Float", "min": -1.0, "max": 1.0, "category": "input"},
-    "Input_LookVertical": {"address": "/input/LookVertical", "type": "Float", "min": -1.0, "max": 1.0, "category": "input"},
-    "Input_Jump": {"address": "/input/Jump", "type": "Bool", "category": "input"},
-    "Input_Run": {"address": "/input/Run", "type": "Bool", "category": "input"},
-    "Input_Voice": {"address": "/input/Voice", "type": "Bool", "category": "input"},
-    "Input_MoveForward": {"address": "/input/MoveForward", "type": "Bool", "category": "input"},
-    "Input_MoveBackward": {"address": "/input/MoveBackward", "type": "Bool", "category": "input"},
-    "Input_MoveLeft": {"address": "/input/MoveLeft", "type": "Bool", "category": "input"},
-    "Input_MoveRight": {"address": "/input/MoveRight", "type": "Bool", "category": "input"},
-    "Input_GrabLeft": {"address": "/input/GrabLeft", "type": "Bool", "category": "input"},
-    "Input_UseLeft": {"address": "/input/UseLeft", "type": "Bool", "category": "input"},
-    "Input_DropLeft": {"address": "/input/DropLeft", "type": "Bool", "category": "input"},
-    "Input_GrabRight": {"address": "/input/GrabRight", "type": "Bool", "category": "input"},
-    "Input_UseRight": {"address": "/input/UseRight", "type": "Bool", "category": "input"},
-    "Input_DropRight": {"address": "/input/DropRight", "type": "Bool", "category": "input"},
-    "Input_LookLeft": {"address": "/input/LookLeft", "type": "Bool", "category": "input"},
-    "Input_LookRight": {"address": "/input/LookRight", "type": "Bool", "category": "input"},
-    "Input_ComfortLeft": {"address": "/input/ComfortLeft", "type": "Bool", "category": "input"},
-    "Input_ComfortRight": {"address": "/input/ComfortRight", "type": "Bool", "category": "input"},
-    "Input_AFKToggle": {"address": "/input/AFKToggle", "type": "Bool", "category": "input"},
-    
-    # ===== Chatbox 控制 =====
-    "Chatbox_Typing": {"address": "/chatbox/typing", "type": "Bool", "category": "chatbox"},
-    
-    # ===== Camera 控制 (Read-Write) =====
-    "Camera_Mode": {"address": "/usercamera/Mode", "type": "Int", "min": 0, "max": 6, "category": "camera"},
-    "Camera_Zoom": {"address": "/usercamera/Zoom", "type": "Float", "min": 20, "max": 150, "category": "camera"},
-    "Camera_Exposure": {"address": "/usercamera/Exposure", "type": "Float", "min": -10, "max": 4, "category": "camera"},
-    "Camera_FocalDistance": {"address": "/usercamera/FocalDistance", "type": "Float", "min": 0, "max": 10, "category": "camera"},
-    "Camera_Aperture": {"address": "/usercamera/Aperture", "type": "Float", "min": 1.4, "max": 32, "category": "camera"},
-    "Camera_Capture": {"address": "/usercamera/Capture", "type": "Bool", "category": "camera"},
-    "Camera_CaptureDelayed": {"address": "/usercamera/CaptureDelayed", "type": "Bool", "category": "camera"},
-    "Camera_Close": {"address": "/usercamera/Close", "type": "Bool", "category": "camera"},
-    "Camera_ShowUIInCamera": {"address": "/usercamera/ShowUIInCamera", "type": "Bool", "category": "camera"},
-    "Camera_LocalPlayer": {"address": "/usercamera/LocalPlayer", "type": "Bool", "category": "camera"},
-    "Camera_RemotePlayer": {"address": "/usercamera/RemotePlayer", "type": "Bool", "category": "camera"},
-    "Camera_Environment": {"address": "/usercamera/Environment", "type": "Bool", "category": "camera"},
-    "Camera_GreenScreen": {"address": "/usercamera/GreenScreen", "type": "Bool", "category": "camera"},
-    "Camera_Lock": {"address": "/usercamera/Lock", "type": "Bool", "category": "camera"},
-    "Camera_SmoothMovement": {"address": "/usercamera/SmoothMovement", "type": "Bool", "category": "camera"},
-    "Camera_LookAtMe": {"address": "/usercamera/LookAtMe", "type": "Bool", "category": "camera"},
-    "Camera_Flying": {"address": "/usercamera/Flying", "type": "Bool", "category": "camera"},
-    "Camera_Streaming": {"address": "/usercamera/Streaming", "type": "Bool", "category": "camera"},
-    
-    # ===== 系统信息 (Read-only) =====
-    "System_AvatarID": {"address": "/avatar/change", "type": "String", "category": "system"},
-    "System_VRMode": {"address": "/avatar/parameters/VRMode", "type": "Int", "category": "system"},
-    "System_TrackingType": {"address": "/avatar/parameters/TrackingType", "type": "Int", "category": "system"},
-    "System_EyeHeightAsMeters": {"address": "/avatar/parameters/EyeHeightAsMeters", "type": "Float", "category": "system"},
-    "System_EyeHeightAsPercent": {"address": "/avatar/parameters/EyeHeightAsPercent", "type": "Float", "category": "system"},
-    
-    # ===== Tracking 系统输出 (Read-only) =====
-    "Tracking_HeadPosX": {"address": "/tracking/vrsystem/head/pose", "type": "Float", "index": 0, "category": "tracking"},
-    "Tracking_HeadPosY": {"address": "/tracking/vrsystem/head/pose", "type": "Float", "index": 1, "category": "tracking"},
-    "Tracking_HeadPosZ": {"address": "/tracking/vrsystem/head/pose", "type": "Float", "index": 2, "category": "tracking"},
-    "Tracking_HeadRotX": {"address": "/tracking/vrsystem/head/pose", "type": "Float", "index": 3, "category": "tracking"},
-    "Tracking_HeadRotY": {"address": "/tracking/vrsystem/head/pose", "type": "Float", "index": 4, "category": "tracking"},
-    "Tracking_HeadRotZ": {"address": "/tracking/vrsystem/head/pose", "type": "Float", "index": 5, "category": "tracking"},
+# ==================== VRChat Wiki 官方 OSC 参数定义 ====================
+# 来源: https://wiki.vrchat.com/wiki/Open_Sound_Control
+
+WIKI_PARAMETERS = {
+    # ===== Input Axes (Write-only) =====
+    "Input_Horizontal": {
+        "address": "/input/Horizontal",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "水平移动",
+        "description": "左右移动控制"
+    },
+    "Input_Vertical": {
+        "address": "/input/Vertical",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "垂直移动",
+        "description": "前后移动控制"
+    },
+    "Input_LookHorizontal": {
+        "address": "/input/LookHorizontal",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "水平视角",
+        "description": "左右视角旋转"
+    },
+    "Input_LookVertical": {
+        "address": "/input/LookVertical",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "垂直视角",
+        "description": "上下视角旋转"
+    },
+    "Input_SpinHoldCwCcw": {
+        "address": "/input/SpinHoldCwCcw",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "物品旋转左右",
+        "description": "手持物品顺时针/逆时针旋转"
+    },
+    "Input_SpinHoldUD": {
+        "address": "/input/SpinHoldUD",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "物品旋转上下",
+        "description": "手持物品上下旋转"
+    },
+    "Input_SpinHoldLR": {
+        "address": "/input/SpinHoldLR",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "物品旋转左右",
+        "description": "手持物品左右旋转"
+    },
+    "Input_MoveHoldFB": {
+        "address": "/input/MoveHoldFB",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "物品移动前后",
+        "description": "手持物品前后移动"
+    },
+    "Input_UseAxisRight": {
+        "address": "/input/UseAxisRight",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "右手使用轴",
+        "description": "右手持物使用轴"
+    },
+    "Input_GrabAxisRight": {
+        "address": "/input/GrabAxisRight",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "input",
+        "display_name": "右手抓取轴",
+        "description": "右手持物抓取轴"
+    },
+
+    # ===== Input Buttons (Write-only) =====
+    "Input_Jump": {
+        "address": "/input/Jump",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "跳跃",
+        "description": "跳跃动作"
+    },
+    "Input_Run": {
+        "address": "/input/Run",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "奔跑",
+        "description": "奔跑动作"
+    },
+    "Input_Voice": {
+        "address": "/input/Voice",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "语音开关",
+        "description": "麦克风开关"
+    },
+    "Input_MoveForward": {
+        "address": "/input/MoveForward",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "向前移动",
+        "description": "向前移动"
+    },
+    "Input_MoveBackward": {
+        "address": "/input/MoveBackward",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "向后移动",
+        "description": "向后移动"
+    },
+    "Input_MoveLeft": {
+        "address": "/input/MoveLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "向左移动",
+        "description": "向左移动"
+    },
+    "Input_MoveRight": {
+        "address": "/input/MoveRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "向右移动",
+        "description": "向右移动"
+    },
+    "Input_LookLeft": {
+        "address": "/input/LookLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "向左看",
+        "description": "向左旋转视角"
+    },
+    "Input_LookRight": {
+        "address": "/input/LookRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "向右看",
+        "description": "向右旋转视角"
+    },
+    "Input_ComfortLeft": {
+        "address": "/input/ComfortLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "舒适左转",
+        "description": "VR快速左转"
+    },
+    "Input_ComfortRight": {
+        "address": "/input/ComfortRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "舒适右转",
+        "description": "VR快速右转"
+    },
+    "Input_GrabLeft": {
+        "address": "/input/GrabLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "左手抓取",
+        "description": "左手抓取物品"
+    },
+    "Input_UseLeft": {
+        "address": "/input/UseLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "左手使用",
+        "description": "左手使用物品"
+    },
+    "Input_DropLeft": {
+        "address": "/input/DropLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "左手丢弃",
+        "description": "左手丢弃物品"
+    },
+    "Input_GrabRight": {
+        "address": "/input/GrabRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "右手抓取",
+        "description": "右手抓取物品"
+    },
+    "Input_UseRight": {
+        "address": "/input/UseRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "右手使用",
+        "description": "右手使用物品"
+    },
+    "Input_DropRight": {
+        "address": "/input/DropRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "右手丢弃",
+        "description": "右手丢弃物品"
+    },
+    "Input_AFKToggle": {
+        "address": "/input/AFKToggle",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "AFK切换",
+        "description": "离开状态切换"
+    },
+    "Input_ToggleSitStand": {
+        "address": "/input/ToggleSitStand",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "坐站切换",
+        "description": "坐姿站姿切换"
+    },
+    "Input_PanicButton": {
+        "address": "/input/PanicButton",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "紧急按钮",
+        "description": "安全模式"
+    },
+    "Input_QuickMenuToggleLeft": {
+        "address": "/input/QuickMenuToggleLeft",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "左手菜单",
+        "description": "左手快捷菜单"
+    },
+    "Input_QuickMenuToggleRight": {
+        "address": "/input/QuickMenuToggleRight",
+        "type": "Bool",
+        "category": "input",
+        "display_name": "右手菜单",
+        "description": "右手快捷菜单"
+    },
+
+    # ===== Chatbox (Write-only) =====
+    "Chatbox_Typing": {
+        "address": "/chatbox/typing",
+        "type": "Bool",
+        "category": "chatbox",
+        "display_name": "输入中",
+        "description": "聊天框输入指示器"
+    },
+
+    # ===== Camera (Read-Write) =====
+    "Camera_Mode": {
+        "address": "/usercamera/Mode",
+        "type": "Int",
+        "min": 0,
+        "max": 6,
+        "category": "camera",
+        "display_name": "相机模式",
+        "description": "相机工作模式"
+    },
+    "Camera_Capture": {
+        "address": "/usercamera/Capture",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "拍照",
+        "description": "拍摄照片"
+    },
+    "Camera_CaptureDelayed": {
+        "address": "/usercamera/CaptureDelayed",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "延时拍照",
+        "description": "延时拍摄"
+    },
+    "Camera_Close": {
+        "address": "/usercamera/Close",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "关闭相机",
+        "description": "关闭相机"
+    },
+    "Camera_Zoom": {
+        "address": "/usercamera/Zoom",
+        "type": "Float",
+        "min": 20,
+        "max": 150,
+        "category": "camera",
+        "display_name": "缩放",
+        "description": "相机缩放"
+    },
+    "Camera_Exposure": {
+        "address": "/usercamera/Exposure",
+        "type": "Float",
+        "min": -10,
+        "max": 4,
+        "category": "camera",
+        "display_name": "曝光",
+        "description": "相机曝光"
+    },
+    "Camera_FocalDistance": {
+        "address": "/usercamera/FocalDistance",
+        "type": "Float",
+        "min": 0,
+        "max": 10,
+        "category": "camera",
+        "display_name": "焦距",
+        "description": "相机焦距"
+    },
+    "Camera_Aperture": {
+        "address": "/usercamera/Aperture",
+        "type": "Float",
+        "min": 1.4,
+        "max": 32,
+        "category": "camera",
+        "display_name": "光圈",
+        "description": "相机光圈"
+    },
+    "Camera_Hue": {
+        "address": "/usercamera/Hue",
+        "type": "Float",
+        "min": 0,
+        "max": 360,
+        "category": "camera",
+        "display_name": "色相",
+        "description": "绿幕色相"
+    },
+    "Camera_Saturation": {
+        "address": "/usercamera/Saturation",
+        "type": "Float",
+        "min": 0,
+        "max": 100,
+        "category": "camera",
+        "display_name": "饱和度",
+        "description": "绿幕饱和度"
+    },
+    "Camera_Lightness": {
+        "address": "/usercamera/Lightness",
+        "type": "Float",
+        "min": 0,
+        "max": 50,
+        "category": "camera",
+        "display_name": "亮度",
+        "description": "绿幕亮度"
+    },
+    "Camera_LookAtMeXOffset": {
+        "address": "/usercamera/LookAtMeXOffset",
+        "type": "Float",
+        "min": -25,
+        "max": 25,
+        "category": "camera",
+        "display_name": "看我X偏移",
+        "description": "看向我X轴偏移"
+    },
+    "Camera_LookAtMeYOffset": {
+        "address": "/usercamera/LookAtMeYOffset",
+        "type": "Float",
+        "min": -25,
+        "max": 25,
+        "category": "camera",
+        "display_name": "看我Y偏移",
+        "description": "看向我Y轴偏移"
+    },
+    "Camera_FlySpeed": {
+        "address": "/usercamera/FlySpeed",
+        "type": "Float",
+        "min": 0.1,
+        "max": 15,
+        "category": "camera",
+        "display_name": "飞行速度",
+        "description": "相机飞行速度"
+    },
+    "Camera_TurnSpeed": {
+        "address": "/usercamera/TurnSpeed",
+        "type": "Float",
+        "min": 0.1,
+        "max": 5,
+        "category": "camera",
+        "display_name": "转向速度",
+        "description": "相机转向速度"
+    },
+    "Camera_SmoothingStrength": {
+        "address": "/usercamera/SmoothingStrength",
+        "type": "Float",
+        "min": 0.1,
+        "max": 10,
+        "category": "camera",
+        "display_name": "平滑强度",
+        "description": "相机平滑强度"
+    },
+    "Camera_PhotoRate": {
+        "address": "/usercamera/PhotoRate",
+        "type": "Float",
+        "min": 0.1,
+        "max": 2,
+        "category": "camera",
+        "display_name": "拍照速率",
+        "description": "轨道拍照速率"
+    },
+    "Camera_Duration": {
+        "address": "/usercamera/Duration",
+        "type": "Float",
+        "min": 0.1,
+        "max": 60,
+        "category": "camera",
+        "display_name": "持续时间",
+        "description": "轨道持续时间"
+    },
+    "Camera_ShowUIInCamera": {
+        "address": "/usercamera/ShowUIInCamera",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "相机显示UI",
+        "description": "在相机中显示UI"
+    },
+    "Camera_LocalPlayer": {
+        "address": "/usercamera/LocalPlayer",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "本地玩家",
+        "description": "显示本地玩家"
+    },
+    "Camera_RemotePlayer": {
+        "address": "/usercamera/RemotePlayer",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "远程玩家",
+        "description": "显示远程玩家"
+    },
+    "Camera_Environment": {
+        "address": "/usercamera/Environment",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "环境",
+        "description": "显示环境"
+    },
+    "Camera_GreenScreen": {
+        "address": "/usercamera/GreenScreen",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "绿幕",
+        "description": "启用绿幕"
+    },
+    "Camera_Lock": {
+        "address": "/usercamera/Lock",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "锁定相机",
+        "description": "锁定相机位置"
+    },
+    "Camera_SmoothMovement": {
+        "address": "/usercamera/SmoothMovement",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "平滑移动",
+        "description": "启用平滑移动"
+    },
+    "Camera_LookAtMe": {
+        "address": "/usercamera/LookAtMe",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "看向我",
+        "description": "相机看向我"
+    },
+    "Camera_AutoLevelRoll": {
+        "address": "/usercamera/AutoLevelRoll",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "自动水平 roll",
+        "description": "自动水平校正 roll"
+    },
+    "Camera_AutoLevelPitch": {
+        "address": "/usercamera/AutoLevelPitch",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "自动水平 pitch",
+        "description": "自动水平校正 pitch"
+    },
+    "Camera_Flying": {
+        "address": "/usercamera/Flying",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "飞行模式",
+        "description": "相机飞行模式"
+    },
+    "Camera_TriggerTakesPhotos": {
+        "address": "/usercamera/TriggerTakesPhotos",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "触发拍照",
+        "description": "触发器拍照"
+    },
+    "Camera_DollyPathsStayVisible": {
+        "address": "/usercamera/DollyPathsStayVisible",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "显示轨道",
+        "description": "轨道路径保持可见"
+    },
+    "Camera_AudioFromCamera": {
+        "address": "/usercamera/AudioFromCamera",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "相机音频",
+        "description": "从相机获取音频"
+    },
+    "Camera_ShowFocus": {
+        "address": "/usercamera/ShowFocus",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "显示焦点",
+        "description": "显示对焦层"
+    },
+    "Camera_Streaming": {
+        "address": "/usercamera/Streaming",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "推流",
+        "description": "Spout推流"
+    },
+    "Camera_RollWhileFlying": {
+        "address": "/usercamera/RollWhileFlying",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "飞行时Roll",
+        "description": "飞行时允许Roll"
+    },
+    "Camera_OrientationIsLandscape": {
+        "address": "/usercamera/OrientationIsLandscape",
+        "type": "Bool",
+        "category": "camera",
+        "display_name": "横屏",
+        "description": "图像横屏方向"
+    },
+
+    # ===== Avatar 系统保留参数 (Read-only) =====
+    "Avatar_VRCEmote": {
+        "address": "/avatar/parameters/VRCEmote",
+        "type": "Int",
+        "min": 1,
+        "max": 16,
+        "category": "avatar",
+        "display_name": "表情动作",
+        "description": "VRChat默认表情"
+    },
+    "Avatar_VRCFaceBlendV": {
+        "address": "/avatar/parameters/VRCFaceBlendV",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "面部表情V",
+        "description": "面部表情垂直混合"
+    },
+    "Avatar_VRCFaceBlendH": {
+        "address": "/avatar/parameters/VRCFaceBlendH",
+        "type": "Float",
+        "min": -1.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "面部表情H",
+        "description": "面部表情水平混合"
+    },
+    "Avatar_GestureRight": {
+        "address": "/avatar/parameters/GestureRight",
+        "type": "Int",
+        "min": 0,
+        "max": 7,
+        "category": "avatar",
+        "display_name": "右手手势",
+        "description": "右手手势状态"
+    },
+    "Avatar_GestureLeft": {
+        "address": "/avatar/parameters/GestureLeft",
+        "type": "Int",
+        "min": 0,
+        "max": 7,
+        "category": "avatar",
+        "display_name": "左手手势",
+        "description": "左手手势状态"
+    },
+    "Avatar_GestureRightWeight": {
+        "address": "/avatar/parameters/GestureRightWeight",
+        "type": "Float",
+        "min": 0.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "右手手势权重",
+        "description": "右手手势强度"
+    },
+    "Avatar_GestureLeftWeight": {
+        "address": "/avatar/parameters/GestureLeftWeight",
+        "type": "Float",
+        "min": 0.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "左手手势权重",
+        "description": "左手手势强度"
+    },
+    "Avatar_ScaleModified": {
+        "address": "/avatar/parameters/ScaleModified",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "缩放修改",
+        "description": "身形缩放已修改"
+    },
+    "Avatar_ScaleFactor": {
+        "address": "/avatar/parameters/ScaleFactor",
+        "type": "Float",
+        "min": 0.1,
+        "max": 10.0,
+        "category": "avatar",
+        "display_name": "缩放因子",
+        "description": "当前身高/默认身高"
+    },
+    "Avatar_ScaleFactorInverse": {
+        "address": "/avatar/parameters/ScaleFactorInverse",
+        "type": "Float",
+        "min": 0.1,
+        "max": 10.0,
+        "category": "avatar",
+        "display_name": "缩放因子逆",
+        "description": "默认身高/当前身高"
+    },
+    "Avatar_EyeHeightAsMeters": {
+        "address": "/avatar/parameters/EyeHeightAsMeters",
+        "type": "Float",
+        "min": 0.2,
+        "max": 5.0,
+        "category": "avatar",
+        "display_name": "眼高米",
+        "description": "眼睛高度（米）"
+    },
+    "Avatar_EyeHeightAsPercent": {
+        "address": "/avatar/parameters/EyeHeightAsPercent",
+        "type": "Float",
+        "min": 0.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "眼高百分比",
+        "description": "眼睛高度百分比"
+    },
+    "Avatar_Viseme": {
+        "address": "/avatar/parameters/Viseme",
+        "type": "Int",
+        "min": 0,
+        "max": 14,
+        "category": "avatar",
+        "display_name": "视位",
+        "description": "口型视位"
+    },
+    "Avatar_Voice": {
+        "address": "/avatar/parameters/Voice",
+        "type": "Float",
+        "min": 0.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "音量",
+        "description": "麦克风音量"
+    },
+    "Avatar_Earmuffs": {
+        "address": "/avatar/parameters/Earmuffs",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "耳罩模式",
+        "description": "耳罩模式开启"
+    },
+    "Avatar_MuteSelf": {
+        "address": "/avatar/parameters/MuteSelf",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "自我静音",
+        "description": "自我静音状态"
+    },
+    "Avatar_AFK": {
+        "address": "/avatar/parameters/AFK",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "AFK状态",
+        "description": "离开状态"
+    },
+    "Avatar_InStation": {
+        "address": "/avatar/parameters/InStation",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "在座位上",
+        "description": "处于座位中"
+    },
+    "Avatar_Seated": {
+        "address": "/avatar/parameters/Seated",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "坐着",
+        "description": "坐姿状态"
+    },
+    "Avatar_VRMode": {
+        "address": "/avatar/parameters/VRMode",
+        "type": "Int",
+        "min": 0,
+        "max": 1,
+        "category": "avatar",
+        "display_name": "VR模式",
+        "description": "VR/桌面模式"
+    },
+    "Avatar_TrackingType": {
+        "address": "/avatar/parameters/TrackingType",
+        "type": "Int",
+        "min": 0,
+        "max": 4,
+        "category": "avatar",
+        "display_name": "追踪类型",
+        "description": "追踪点数量"
+    },
+    "Avatar_Grounded": {
+        "address": "/avatar/parameters/Grounded",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "着地",
+        "description": "脚部接触地面"
+    },
+    "Avatar_Upright": {
+        "address": "/avatar/parameters/Upright",
+        "type": "Float",
+        "min": 0.0,
+        "max": 1.0,
+        "category": "avatar",
+        "display_name": "直立度",
+        "description": "身体直立程度"
+    },
+    "Avatar_AngularY": {
+        "address": "/avatar/parameters/AngularY",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "avatar",
+        "display_name": "Y轴角速度",
+        "description": "Y轴旋转角速度"
+    },
+    "Avatar_VelocityX": {
+        "address": "/avatar/parameters/VelocityX",
+        "type": "Float",
+        "min": -5.0,
+        "max": 5.0,
+        "category": "avatar",
+        "display_name": "X轴速度",
+        "description": "横向移动速度"
+    },
+    "Avatar_VelocityY": {
+        "address": "/avatar/parameters/VelocityY",
+        "type": "Float",
+        "min": -5.0,
+        "max": 5.0,
+        "category": "avatar",
+        "display_name": "Y轴速度",
+        "description": "垂直移动速度"
+    },
+    "Avatar_VelocityZ": {
+        "address": "/avatar/parameters/VelocityZ",
+        "type": "Float",
+        "min": -5.0,
+        "max": 5.0,
+        "category": "avatar",
+        "display_name": "Z轴速度",
+        "description": "纵向移动速度"
+    },
+    "Avatar_VelocityMagnitude": {
+        "address": "/avatar/parameters/VelocityMagnitude",
+        "type": "Float",
+        "min": 0.0,
+        "max": 10.0,
+        "category": "avatar",
+        "display_name": "速度大小",
+        "description": "总速度大小"
+    },
+    "Avatar_PreviewMode": {
+        "address": "/avatar/parameters/PreviewMode",
+        "type": "Int",
+        "min": 0,
+        "max": 1,
+        "category": "avatar",
+        "display_name": "预览模式",
+        "description": "菜单预览模式"
+    },
+    "Avatar_IsOnFriendsList": {
+        "address": "/avatar/parameters/IsOnFriendsList",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "好友列表",
+        "description": "在好友列表中"
+    },
+    "Avatar_IsAnimatorEnabled": {
+        "address": "/avatar/parameters/IsAnimatorEnabled",
+        "type": "Bool",
+        "category": "avatar",
+        "display_name": "动画器启用",
+        "description": "动画器已启用"
+    },
+
+    # ===== System (Read-only) =====
+    "System_AvatarID": {
+        "address": "/avatar/change",
+        "type": "String",
+        "category": "system",
+        "display_name": "角色ID",
+        "description": "当前角色ID"
+    },
+
+    # ===== Tracking (Read-only) =====
+    "Tracking_HeadPosX": {
+        "address": "/tracking/vrsystem/head/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "头部位置X",
+        "index": 0,
+        "description": "头部X轴位置"
+    },
+    "Tracking_HeadPosY": {
+        "address": "/tracking/vrsystem/head/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "头部位置Y",
+        "index": 1,
+        "description": "头部Y轴位置"
+    },
+    "Tracking_HeadPosZ": {
+        "address": "/tracking/vrsystem/head/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "头部位置Z",
+        "index": 2,
+        "description": "头部Z轴位置"
+    },
+    "Tracking_HeadRotX": {
+        "address": "/tracking/vrsystem/head/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "头部旋转X",
+        "index": 3,
+        "description": "头部X轴旋转"
+    },
+    "Tracking_HeadRotY": {
+        "address": "/tracking/vrsystem/head/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "头部旋转Y",
+        "index": 4,
+        "description": "头部Y轴旋转"
+    },
+    "Tracking_HeadRotZ": {
+        "address": "/tracking/vrsystem/head/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "头部旋转Z",
+        "index": 5,
+        "description": "头部Z轴旋转"
+    },
+    "Tracking_LeftWristPosX": {
+        "address": "/tracking/vrsystem/leftwrist/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "左手腕位置X",
+        "index": 0,
+        "description": "左手腕X轴位置"
+    },
+    "Tracking_LeftWristPosY": {
+        "address": "/tracking/vrsystem/leftwrist/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "左手腕位置Y",
+        "index": 1,
+        "description": "左手腕Y轴位置"
+    },
+    "Tracking_LeftWristPosZ": {
+        "address": "/tracking/vrsystem/leftwrist/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "左手腕位置Z",
+        "index": 2,
+        "description": "左手腕Z轴位置"
+    },
+    "Tracking_LeftWristRotX": {
+        "address": "/tracking/vrsystem/leftwrist/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "左手腕旋转X",
+        "index": 3,
+        "description": "左手腕X轴旋转"
+    },
+    "Tracking_LeftWristRotY": {
+        "address": "/tracking/vrsystem/leftwrist/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "左手腕旋转Y",
+        "index": 4,
+        "description": "左手腕Y轴旋转"
+    },
+    "Tracking_LeftWristRotZ": {
+        "address": "/tracking/vrsystem/leftwrist/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "左手腕旋转Z",
+        "index": 5,
+        "description": "左手腕Z轴旋转"
+    },
+    "Tracking_RightWristPosX": {
+        "address": "/tracking/vrsystem/rightwrist/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "右手腕位置X",
+        "index": 0,
+        "description": "右手腕X轴位置"
+    },
+    "Tracking_RightWristPosY": {
+        "address": "/tracking/vrsystem/rightwrist/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "右手腕位置Y",
+        "index": 1,
+        "description": "右手腕Y轴位置"
+    },
+    "Tracking_RightWristPosZ": {
+        "address": "/tracking/vrsystem/rightwrist/pose",
+        "type": "Float",
+        "min": -10.0,
+        "max": 10.0,
+        "category": "tracking",
+        "display_name": "右手腕位置Z",
+        "index": 2,
+        "description": "右手腕Z轴位置"
+    },
+    "Tracking_RightWristRotX": {
+        "address": "/tracking/vrsystem/rightwrist/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "右手腕旋转X",
+        "index": 3,
+        "description": "右手腕X轴旋转"
+    },
+    "Tracking_RightWristRotY": {
+        "address": "/tracking/vrsystem/rightwrist/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "右手腕旋转Y",
+        "index": 4,
+        "description": "右手腕Y轴旋转"
+    },
+    "Tracking_RightWristRotZ": {
+        "address": "/tracking/vrsystem/rightwrist/pose",
+        "type": "Float",
+        "min": -180.0,
+        "max": 180.0,
+        "category": "tracking",
+        "display_name": "右手腕旋转Z",
+        "index": 5,
+        "description": "右手腕Z轴旋转"
+    },
+
+    # ===== Dolly (Write-only) =====
+    "Dolly_Play": {
+        "address": "/dolly/Play",
+        "type": "Bool",
+        "category": "dolly",
+        "display_name": "播放轨道",
+        "description": "播放轨道动画"
+    },
+    "Dolly_PlayDelayed": {
+        "address": "/dolly/PlayDelayed",
+        "type": "Float",
+        "min": 0.0,
+        "max": 60.0,
+        "category": "dolly",
+        "display_name": "延时播放",
+        "description": "延时播放轨道"
+    },
 }
+
+
+class ParameterProvider(ABC):
+    """Parameter provider abstract base class"""
+
+    @abstractmethod
+    def get_parameters(self) -> Dict[str, Parameter]:
+        """Return parameter dict {name: Parameter}"""
+        pass
+
+    @abstractmethod
+    def get_source_name(self) -> str:
+        """Return parameter source name"""
+        pass
+
+
+class WikiParameterProvider(ParameterProvider):
+    """VRChat Wiki official parameter provider"""
+
+    def get_parameters(self) -> Dict[str, Parameter]:
+        parameters = {}
+        for name, config in WIKI_PARAMETERS.items():
+            category = config.get("category", "other")
+
+            # Determine read/write based on category
+            if category == "input":
+                is_input = True
+                is_output = False
+            elif category == "chatbox":
+                is_input = True
+                is_output = False
+            elif category == "camera":
+                is_input = True
+                is_output = True
+            elif category == "system":
+                is_input = True
+                is_output = True
+            elif category == "tracking":
+                is_input = False
+                is_output = True
+            elif category == "avatar":
+                # Avatar system parameters are read-only
+                is_input = False
+                is_output = True
+            elif category == "dolly":
+                is_input = True
+                is_output = False
+            else:
+                is_input = True
+                is_output = False
+
+            param = Parameter(
+                name=name,
+                address=config["address"],
+                param_type=config["type"],
+                min_val=config.get("min", 0.0),
+                max_val=config.get("max", 1.0),
+                is_input=is_input,
+                is_output=is_output,
+                category=category,
+                description=config.get("description", ""),
+                display_name=config.get("display_name", name)
+            )
+            parameters[name] = param
+        return parameters
+
+    def get_source_name(self) -> str:
+        return "VRChat Wiki Official"
+
+
+class JsonFileParameterProvider(ParameterProvider):
+    """JSON file parameter provider (for custom avatar parameters)"""
+
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+
+    def get_parameters(self) -> Dict[str, Parameter]:
+        parameters = {}
+
+        if not os.path.exists(self.file_path):
+            print(f"[Config] JSON file not found: {self.file_path}")
+            return parameters
+
+        try:
+            with open(self.file_path, 'r', encoding='utf-8-sig') as f:
+                config = json.load(f)
+
+            for p in config.get("parameters", []):
+                name = p["name"]
+
+                # Input parameters
+                if "input" in p:
+                    inp = p["input"]
+                    param_type = inp["type"]
+
+                    min_val, max_val = 0.0, 1.0
+                    if param_type == "Int":
+                        min_val, max_val = 0, 8
+                    elif param_type == "Float":
+                        min_val, max_val = 0.0, 1.0
+                    elif param_type == "Bool":
+                        min_val, max_val = 0, 1
+
+                    param = Parameter(
+                        name=name,
+                        address=inp["address"],
+                        param_type=param_type,
+                        min_val=min_val,
+                        max_val=max_val,
+                        is_input=True,
+                        is_output=False,
+                        category="avatar",
+                        description="Custom avatar parameter from JSON"
+                    )
+                    parameters[name] = param
+
+                # Output parameters
+                if "output" in p:
+                    out = p["output"]
+                    param_type = out["type"]
+
+                    min_val, max_val = 0.0, 1.0
+                    if param_type == "Int":
+                        min_val, max_val = 0, 255
+                    elif param_type == "Float":
+                        min_val, max_val = -1.0, 1.0
+                    elif param_type == "Bool":
+                        min_val, max_val = 0, 1
+
+                    if name in parameters:
+                        # Existing input parameter, add output capability
+                        parameters[name].is_output = True
+                    else:
+                        param = Parameter(
+                            name=name,
+                            address=out["address"],
+                            param_type=param_type,
+                            min_val=min_val,
+                            max_val=max_val,
+                            is_input=False,
+                            is_output=True,
+                            category="avatar",
+                            description="Custom avatar parameter from JSON"
+                        )
+                        parameters[name] = param
+
+            print(f"[Config] Loaded {len(parameters)} parameters from JSON: {self.file_path}")
+
+        except Exception as e:
+            print(f"[Config] Error loading JSON file: {e}")
+
+        return parameters
+
+    def get_source_name(self) -> str:
+        return f"JSON File: {self.file_path}"
+
+
+class CompositeParameterProvider(ParameterProvider):
+    """Combine multiple parameter providers"""
+
+    def __init__(self, providers: List[ParameterProvider]):
+        self.providers = providers
+
+    def get_parameters(self) -> Dict[str, Parameter]:
+        """Merge parameters from all providers, later ones override earlier ones"""
+        parameters = {}
+        for provider in self.providers:
+            params = provider.get_parameters()
+            source_name = provider.get_source_name()
+            print(f"[Config] Loading from {source_name}: {len(params)} parameters")
+
+            for name, param in params.items():
+                if name in parameters:
+                    # Merge same-name parameters (input/output attributes)
+                    existing = parameters[name]
+                    existing.is_input = existing.is_input or param.is_input
+                    existing.is_output = existing.is_output or param.is_output
+                    # Keep more precise range definition
+                    if param.min_val != 0.0 or param.max_val != 1.0:
+                        existing.min_val = param.min_val
+                        existing.max_val = param.max_val
+                else:
+                    parameters[name] = param
+
+        return parameters
+
+    def get_source_name(self) -> str:
+        return "Composite"
 
 
 class OSCManager:
@@ -115,26 +1263,20 @@ class OSCManager:
         self.transport = None
         self.message_queue = asyncio.Queue()
         self._running = False
-        
+
     def setup(self):
-        """初始化OSC客户端和服务器"""
-        # OSC客户端 - 发送给VRChat
+        """Initialize OSC client and server"""
         self.client = SimpleUDPClient(OSC_SEND_IP, OSC_SEND_PORT)
-        
-        # 设置OSC消息处理器
-        # Avatar参数
+
+        # Set up OSC message handlers
         self.dispatcher.map("/avatar/parameters/*", self._handle_avatar_messages)
-        # Avatar变化
         self.dispatcher.map("/avatar/change", self._handle_avatar_change)
-        # 相机参数
         self.dispatcher.map("/usercamera/*", self._handle_camera_messages)
-        # Tracking参数
         self.dispatcher.map("/tracking/vrsystem/*/pose", self._handle_tracking_messages)
-        # 默认处理器
         self.dispatcher.set_default_handler(self._handle_unknown_message)
-        
+
     def _handle_avatar_messages(self, address: str, *args):
-        """处理Avatar参数消息"""
+        """Handle avatar parameter messages"""
         if not args:
             return
         value = args[0]
@@ -144,9 +1286,9 @@ class OSCManager:
             )
         except:
             pass
-    
+
     def _handle_avatar_change(self, address: str, *args):
-        """处理Avatar切换消息"""
+        """Handle avatar change message"""
         if not args:
             return
         avatar_id = args[0] if isinstance(args[0], str) else str(args[0])
@@ -157,9 +1299,9 @@ class OSCManager:
             )
         except:
             pass
-    
+
     def _handle_camera_messages(self, address: str, *args):
-        """处理相机参数消息"""
+        """Handle camera parameter messages"""
         if not args:
             return
         value = args[0]
@@ -169,41 +1311,40 @@ class OSCManager:
             )
         except:
             pass
-    
+
     def _handle_tracking_messages(self, address: str, *args):
-        """处理Tracking消息 (6个float值)"""
+        """Handle tracking messages (6 float values)"""
         if len(args) < 6:
             return
-        # 存储完整的pose数据
         try:
             asyncio.get_event_loop().call_soon_threadsafe(
                 self.message_queue.put_nowait, ("tracking", address, list(args[:6]))
             )
         except:
             pass
-    
+
     def _handle_unknown_message(self, address: str, *args):
-        """处理未知的OSC消息"""
+        """Handle unknown OSC messages"""
         if args:
             print(f"[OSC] Unknown message: {address} {args}")
-        
+
     async def process_messages(self):
-        """处理消息队列"""
+        """Process message queue"""
         while self._running:
             try:
                 category, address, value = await asyncio.wait_for(
                     self.message_queue.get(), timeout=0.1
                 )
-                
-                # 查找对应的参数
+
+                # Find corresponding parameter
                 for name, param in self.controller.parameters.items():
                     if param.category != category:
                         continue
-                    
-                    # 特殊处理tracking (多值)
+
+                    # Special handling for tracking (multi-value)
                     if category == "tracking" and isinstance(value, list):
                         if param.address == address:
-                            idx = SYSTEM_PARAMETERS.get(name, {}).get("index", 0)
+                            idx = WIKI_PARAMETERS.get(name, {}).get("index", 0)
                             if idx < len(value):
                                 param.value = value[idx]
                                 await self.controller.broadcast({
@@ -221,14 +1362,14 @@ class OSCManager:
                             "category": category
                         })
                         break
-                        
+
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 print(f"[OSC] Process error: {e}")
-        
+
     async def start_server(self):
-        """启动OSC接收服务器"""
+        """Start OSC receive server"""
         loop = asyncio.get_event_loop()
         self.server = AsyncIOOSCUDPServer(
             ("0.0.0.0", OSC_RECEIVE_PORT),
@@ -237,20 +1378,19 @@ class OSCManager:
         )
         self.transport, protocol = await self.server.create_serve_endpoint()
         self._running = True
-        
-        # 启动消息处理任务
+
         asyncio.create_task(self.process_messages())
-        
+
         print(f"[OSC] Server listening on port {OSC_RECEIVE_PORT}")
-        
+
     async def stop_server(self):
-        """停止OSC服务器"""
+        """Stop OSC server"""
         self._running = False
         if self.transport:
             self.transport.close()
-            
+
     def send(self, address: str, value: Any):
-        """发送OSC消息到VRChat"""
+        """Send OSC message to VRChat"""
         if self.client:
             self.client.send_message(address, value)
             print(f"[OSC] Sent: {address} = {value}")
@@ -261,92 +1401,36 @@ class VRChatController:
         self.parameters: Dict[str, Parameter] = {}
         self.websockets: set = set()
         self.osc = OSCManager(self)
-        
+        self._parameter_provider: Optional[ParameterProvider] = None
+
+    def setup_parameter_provider(self, load_json: bool = False, json_file: str = CONFIG_FILE):
+        """Setup parameter provider
+
+        Args:
+            load_json: Whether to load JSON file as parameter extension
+            json_file: JSON file path
+        """
+        providers: List[ParameterProvider] = [WikiParameterProvider()]
+
+        if load_json:
+            providers.append(JsonFileParameterProvider(json_file))
+            print(f"[Config] JSON extension enabled: {json_file}")
+        else:
+            print("[Config] Using Wiki standard parameters only (JSON extension disabled)")
+            print("[Config] Set LOAD_JSON_PARAMS=true to enable JSON extension")
+
+        self._parameter_provider = CompositeParameterProvider(providers)
+
     def load_config(self):
-        """加载参数配置 (JSON文件 + 系统参数)"""
-        # 1. 加载系统参数
-        for name, config in SYSTEM_PARAMETERS.items():
-            param = Parameter(
-                name=name,
-                address=config["address"],
-                param_type=config["type"],
-                min_val=config.get("min", 0.0),
-                max_val=config.get("max", 1.0),
-                is_input=True,
-                is_output=(config["category"] in ["system", "camera", "tracking"]),
-                category=config["category"]
-            )
-            self.parameters[name] = param
-        
-        # 2. 加载Avatar参数
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r', encoding='utf-8-sig') as f:
-                config = json.load(f)
-                
-            for p in config.get("parameters", []):
-                name = p["name"]
-                
-                # Input参数
-                if "input" in p:
-                    inp = p["input"]
-                    param_type = inp["type"]
-                    
-                    min_val, max_val = 0.0, 1.0
-                    if param_type == "Int":
-                        min_val, max_val = 0, 8
-                    elif param_type == "Float":
-                        min_val, max_val = 0.0, 1.0
-                    elif param_type == "Bool":
-                        min_val, max_val = 0, 1
-                    
-                    # 如果系统参数中已存在，更新它
-                    if name in self.parameters:
-                        self.parameters[name].is_input = True
-                        self.parameters[name].min_val = min_val
-                        self.parameters[name].max_val = max_val
-                    else:
-                        param = Parameter(
-                            name=name,
-                            address=inp["address"],
-                            param_type=param_type,
-                            min_val=min_val,
-                            max_val=max_val,
-                            is_input=True,
-                            category="avatar"
-                        )
-                        self.parameters[name] = param
-                
-                # Output参数
-                if "output" in p:
-                    out = p["output"]
-                    param_type = out["type"]
-                    
-                    min_val, max_val = 0.0, 1.0
-                    if param_type == "Int":
-                        min_val, max_val = 0, 255
-                    elif param_type == "Float":
-                        min_val, max_val = -1.0, 1.0
-                    elif param_type == "Bool":
-                        min_val, max_val = 0, 1
-                    
-                    if name in self.parameters:
-                        self.parameters[name].is_output = True
-                    else:
-                        param = Parameter(
-                            name=name,
-                            address=out["address"],
-                            param_type=param_type,
-                            min_val=min_val,
-                            max_val=max_val,
-                            is_output=True,
-                            category="avatar"
-                        )
-                        self.parameters[name] = param
-        
-        print(f"[Config] Loaded {len(self.parameters)} parameters")
-        
+        """Load parameter configuration"""
+        if self._parameter_provider is None:
+            self.setup_parameter_provider(load_json=LOAD_JSON_PARAMS)
+
+        self.parameters = self._parameter_provider.get_parameters()
+        print(f"[Config] Total parameters loaded: {len(self.parameters)}")
+
     def get_parameter_list(self) -> List[Dict]:
-        """获取参数列表供前端使用"""
+        """Get parameter list for frontend"""
         result = []
         for name, param in self.parameters.items():
             result.append({
@@ -358,15 +1442,17 @@ class VRChatController:
                 "isInput": param.is_input,
                 "isOutput": param.is_output,
                 "value": param.value,
-                "category": param.category
+                "category": param.category,
+                "displayName": param.display_name,
+                "description": param.description
             })
         return result
-        
+
     async def broadcast(self, message: Dict):
-        """广播消息给所有WebSocket客户端"""
+        """Broadcast message to all WebSocket clients"""
         if not self.websockets:
             return
-        
+
         disconnected = set()
         for ws in self.websockets:
             try:
@@ -374,23 +1460,23 @@ class VRChatController:
             except Exception as e:
                 print(f"[WebSocket] Send error: {e}")
                 disconnected.add(ws)
-        
+
         self.websockets -= disconnected
-        
+
     async def handle_websocket(self, request):
-        """处理WebSocket连接"""
+        """Handle WebSocket connection"""
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-        
+
         print(f"[WebSocket] Client connected")
         self.websockets.add(ws)
-        
-        # 发送初始参数列表
+
+        # Send initial parameter list
         await ws.send_json({
             "type": "init",
             "parameters": self.get_parameter_list()
         })
-        
+
         try:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -403,22 +1489,22 @@ class VRChatController:
         finally:
             self.websockets.discard(ws)
             print(f"[WebSocket] Client disconnected")
-            
+
         return ws
-        
+
     async def handle_message(self, data: Dict):
-        """处理前端发来的消息"""
+        """Handle message from frontend"""
         msg_type = data.get("type")
-        
+
         if msg_type == "set":
             name = data.get("name")
             value = data.get("value")
-            
+
             if name in self.parameters:
                 param = self.parameters[name]
                 param.value = value
-                
-                # 根据参数类型转换值
+
+                # Convert value based on parameter type
                 send_value = value
                 if param.param_type == "Float":
                     send_value = float(value)
@@ -426,77 +1512,72 @@ class VRChatController:
                     send_value = int(value)
                 elif param.param_type == "Bool":
                     send_value = bool(value)
-                
-                # 发送给VRChat
+
+                # Send to VRChat
                 self.osc.send(param.address, send_value)
-                
-                # 广播给其他客户端
+
+                # Broadcast to other clients
                 await self.broadcast({
                     "type": "input",
                     "name": name,
                     "value": value,
                     "category": param.category
                 })
-        
+
         elif msg_type == "chatbox":
-            # 处理聊天框消息
             text = data.get("text", "")
             send_immediately = data.get("send", True)
             notification = data.get("notification", True)
-            
+
             if self.osc.client:
-                # /chatbox/input expects: string, bool, bool
                 self.osc.client.send_message("/chatbox/input", [text, send_immediately, notification])
                 print(f"[OSC] Chatbox: {text}")
 
 
-# 全局控制器实例
 controller = VRChatController()
 
 
 async def index_handler(request):
-    """处理首页请求"""
+    """Handle index request"""
     return web.FileResponse('./static/index.html')
 
 
 async def init_app():
-    """初始化应用"""
-    # 加载配置
+    """Initialize application"""
+    controller.setup_parameter_provider(load_json=LOAD_JSON_PARAMS)
     controller.load_config()
-    
-    # 设置OSC
+
     controller.osc.setup()
     await controller.osc.start_server()
-    
-    # 创建Web应用
+
     app = web.Application()
     app.router.add_get('/', index_handler)
     app.router.add_get('/ws', controller.handle_websocket)
     app.router.add_static('/static/', path='./static', name='static')
-    
+
     return app
 
 
 async def main():
-    """主函数"""
+    """Main function"""
     app = await init_app()
-    
+
     runner = web.AppRunner(app)
     await runner.setup()
-    
+
     site = web.TCPSite(runner, WEB_HOST, WEB_PORT)
     await site.start()
-    
+
     print(f"[Web] Server started at http://localhost:{WEB_PORT}")
     print(f"[OSC] Sending to {OSC_SEND_IP}:{OSC_SEND_PORT}")
     print(f"[OSC] Receiving on port {OSC_RECEIVE_PORT}")
-    print("\n按 Ctrl+C 停止程序\n")
-    
+    print("\nPress Ctrl+C to stop\n")
+
     try:
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
-        print("\n正在停止...")
+        print("\nStopping...")
         await controller.osc.stop_server()
         await runner.cleanup()
 
